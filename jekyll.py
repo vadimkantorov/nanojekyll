@@ -28,11 +28,12 @@ class NanoJekyll:
         
 
     def render_layout(self, ctx = {}, layout = ''):
-        front_matter_layout, template_layout = self.layouts[layout]
-        actual = templite.Templite(template_layout).render(context = dict(ctx, escape = lambda s: s))
+        frontmatter_layout, template_layout = self.layouts[layout]
+        actual = templite.Templite(template_layout, dict(includes = self.includes)).render(context = dict(ctx, escape = lambda s: s, default = lambda s, t: s + t))
         return actual
 
 
 if __name__ == '__main__':
     jekyll = NanoJekyll(base_dir = '../../')
     print(jekyll.render_layout(ctx = dict(page = dict(title = 'asd'), content = 'fgh'), layout = 'page.html'))
+    print(jekyll.render_layout(ctx = dict(page = dict(lang = 'asd'), site = dict(lang = 'klm'), content = 'fgh'), layout = 'base.html'))

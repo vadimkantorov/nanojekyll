@@ -33,41 +33,33 @@ class CodeBuilder(object):
 
 
 class Templite(object):
-    """A simple template renderer, for a nano-subset of Django syntax.
+    @staticmethod
+    def split_tokens(text):
+        return re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
 
-    Supported constructs are extended variable access::
-
-        {{var.modifer.modifier|filter|filter}}
-
-    loops::
-
-        {% for var in list %}...{% endfor %}
-
-    and ifs::
-
-        {% if var %}...{% endif %}
-
-    Comments are within curly-hash markers::
-
-        {# This will be ignored #}
-
-    Construct a Templite with the template text, then use `render` against a
-    dictionary context to create a finished string::
-
-        templite = Templite('''
-            <h1>Hello {{name|upper}}!</h1>
-            {% for topic in topics %}
-                <p>You are interested in {{topic}}.</p>
-            {% endif %}
-            ''',
-            {'upper': str.upper},
-        )
-        text = templite.render({
-            'name': "Ned",
-            'topics': ['Python', 'Geometry', 'Juggling'],
-        })
-
-    """
+    #A simple template renderer, for a nano-subset of Django syntax.
+    #Supported constructs are extended variable access::
+    #    {{var.modifer.modifier|filter|filter}}
+    #loops::
+    #    {% for var in list %}...{% endfor %}
+    #and ifs::
+    #    {% if var %}...{% endif %}
+    #Comments are within curly-hash markers::
+    #    {# This will be ignored #}
+    #Construct a Templite with the template text, then use `render` against a
+    #dictionary context to create a finished string::
+    #    templite = Templite('''
+    #        <h1>Hello {{name|upper}}!</h1>
+    #        {% for topic in topics %}
+    #            <p>You are interested in {{topic}}.</p>
+    #        {% endif %}
+    #        ''',
+    #        {'upper': str.upper},
+    #    )
+    #    text = templite.render({
+    #        'name': "Ned",
+    #        'topics': ['Python', 'Geometry', 'Juggling'],
+    #    })
     def __init__(self, text, *contexts):
         self.context = {}
         for context in contexts:
@@ -83,35 +75,42 @@ class Templite(object):
         code.indent()
         vars_code = code.add_section()
         code.add_line("result = []")
-        #code.add_line("append_result = result.append")
-        #code.add_line("extend_result = result.extend")
-        #code.add_line("to_str = str")
 
-        buffered = []
-        def flush_output():
-            """Force `buffered` to the code builder."""
-            if len(buffered) == 1:
-                code.add_line("result.append(%s)" % buffered[0])
-            elif len(buffered) > 1:
-                code.add_line("result.extend([%s])" % ", ".join(buffered))
-            del buffered[:]
+        #buffered = []
+        #def flush_output():
+        #    """Force `buffered` to the code builder."""
+        #    if len(buffered) == 1:
+        #        code.add_line("result.append(%s)" % buffered[0])
+        #    elif len(buffered) > 1:
+        #        code.add_line("result.extend([%s])" % ", ".join(buffered))
+        #    del buffered[:]
 
         ops_stack = []
 
         # Split the text to form a list of tokens.
-        tokens = re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
-
-        for token in tokens:
+        tokens = self.split_tokens(text)
+        
+        i = 0;
+        while i < len(tokens):
+            token = tokens[i]
             if token.startswith('{#'): # comment
+                i += 1
                 continue
 
             elif token.startswith('{{'): # an expression to evaluate.
                 expr = self._expr_code(token[2:-2].strip())
-                buffered.append("str(%s)" % expr)
+                code.add_line("result.append(%s)" % ("str(%s)" % expr))
+
             elif token.startswith('{%'):
                 # Action tag: split into words and parse further.
-                flush_output()
+                #flush_output()
                 words = token[2:-2].strip().split()
+                #TODO: whitespace control not supported for now
+                if words[0] == '-':
+                    del words[0]
+                if words[-1] == '-':
+                    del words[-1]
+
                 if words[0] == 'if':
                     # An if statement: evaluate the expression to determine if.
                     if len(words) != 2:
@@ -119,19 +118,16 @@ class Templite(object):
                     ops_stack.append('if')
                     code.add_line("if %s:" % self._expr_code(words[1]))
                     code.indent()
+                
                 elif words[0] == 'for':
                     # A loop: iterate over expression result.
                     if len(words) != 4 or words[2] != 'in':
                         self._syntax_error("Don't understand for", token)
                     ops_stack.append('for')
                     self._variable(words[1], self.loop_vars)
-                    code.add_line(
-                        "for c_%s in %s:" % (
-                            words[1],
-                            self._expr_code(words[3])
-                        )
-                    )
+                    code.add_line("for c_%s in %s:" % (words[1], self._expr_code(words[3]) ) )
                     code.indent()
+                
                 elif words[0].startswith('end'):
                     # Endsomething.  Pop the ops stack.
                     if len(words) != 1:
@@ -143,17 +139,28 @@ class Templite(object):
                     if start_what != end_what:
                         self._syntax_error("Mismatched end tag", end_what)
                     code.dedent()
+
+                elif words[0] == 'include':
+                    #code.add_line('#include ' + words[-1])
+                    frontmatter_include, template_include = self.context.get('includes', {})[words[1]]
+                    tokens = tokens[:i + 1] + self.split_tokens(template_include) + tokens[i + 1:]
+                
+                elif words[0] == 'seo':
+                    code.add_line('#seo#')
+        
                 else:
                     self._syntax_error("Don't understand tag", words[0])
             else:
                 # Literal content.  If it isn't empty, output it.
                 if token:
-                    buffered.append(repr(token))
+                    code.add_line("result.append(%s)" % (repr(token)))
+                    #buffered.append(repr(token))
+            i += 1
 
         if ops_stack:
             self._syntax_error("Unmatched action tag", ops_stack[-1])
 
-        flush_output()
+        #flush_output()
 
         for var_name in self.all_vars - self.loop_vars:
             vars_code.add_line("c_%s = context[%r]" % (var_name, var_name))
@@ -166,13 +173,22 @@ class Templite(object):
         self._render_function = code.get_globals()['render_function']
 
     def _expr_code(self, expr):
+        expr = expr.strip()
         #print('_expr_code:', expr)
-        if "|" in expr:
+        if expr.startswith('"') and expr.endswith('"'):
+            return expr
+        elif "|" in expr:
             pipes = list(map(str.strip, expr.split("|")))
             code = self._expr_code(pipes[0])
             for func in pipes[1:]:
-                self._variable(func, self.all_vars)
-                code = "c_%s(%s)" % (func, code)
+                func_name, *func_args = func.split(':', maxsplit = 1)
+                self._variable(func_name, self.all_vars)
+                if not func_args:
+                    code = "c_%s(%s)" % (func_name, code)
+                else:
+                    assert len(func_args) == 1
+                    code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
+                    
         elif "." in expr:
             dots = expr.split(".")
             code = self._expr_code(dots[0])
