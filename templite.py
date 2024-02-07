@@ -3,9 +3,6 @@
 import re
 import sys
 
-class TempliteSyntaxError(ValueError):
-    pass
-
 class CodeBuilder(object):
     INDENT_STEP = 4      # PEP8 says so!
     def __init__(self, indent=0):
@@ -94,7 +91,10 @@ class Templite(object):
             elif token.startswith('{%'):
                 # Action tag: split into words and parse further.
                 #flush_output()
-                words = token[2:-2].strip().split()
+                b = 3 if token.startswith('{%-') else 2
+                e = -3 if token.endswith('-%}') else -2
+                token_inner = token[b:e].strip()
+                words = token_inner.split()
                 #TODO: whitespace control not supported for now
                 if words[0] == '-':
                     del words[0]
@@ -104,7 +104,6 @@ class Templite(object):
                 if words[0] == 'if':
                     # An if statement: evaluate the expression to determine if.
                     if len(words) != 2:
-                        breakpoint()
                         self._syntax_error("Don't understand if", token)
                     ops_stack.append('if')
                     code.add_line("if %s:" % self._expr_code(words[1]))
@@ -136,6 +135,17 @@ class Templite(object):
                     frontmatter_include, template_include = self.context.get('includes', {})[words[1]]
                     tokens = tokens[:i + 1] + self.split_tokens(template_include) + tokens[i + 1:]
                 
+                elif words[0] == 'assign':
+                    assert words[2] == '='
+                    try:
+                        expr = self._expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
+                    except:
+                        breakpoint()
+                    var_name = words[1]
+                    code.add_line('%s = %s' % (var_name, expr))
+                    self._variable(var_name, self.all_vars)
+
+
                 elif words[0] == 'seo':
                     code.add_line('#seo#')
         
@@ -151,8 +161,6 @@ class Templite(object):
         if ops_stack:
             self._syntax_error("Unmatched action tag", ops_stack[-1])
 
-        #flush_output()
-
         for var_name in self.all_vars - self.loop_vars:
             vars_code.add_line("c_%s = context[%r]" % (var_name, var_name))
 
@@ -167,6 +175,8 @@ class Templite(object):
         expr = expr.strip()
         #print('_expr_code:', expr)
         if expr.startswith('"') and expr.endswith('"'):
+            return expr
+        elif expr.startswith("'") and expr.endswith("'"):
             return expr
         elif "|" in expr:
             pipes = list(map(str.strip, expr.split("|")))
@@ -191,7 +201,7 @@ class Templite(object):
         return code
 
     def _syntax_error(self, msg, thing):
-        raise TempliteSyntaxError("%s: %r" % (msg, thing))
+        raise ValueError("%s: %r" % (msg, thing))
 
     def _variable(self, name, vars_set):
         if not re.match(r"[_a-zA-Z][_a-zA-Z0-9]*$", name):

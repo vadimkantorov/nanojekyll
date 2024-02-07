@@ -2,7 +2,7 @@ import os
 import templite
 
 class NanoJekyll:
-    def __init__(self, base_dir, includes_dirname = '_includes', layouts_dirname = '_layouts'):
+    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts'):
         self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
         self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
 
@@ -34,6 +34,6 @@ class NanoJekyll:
 
 
 if __name__ == '__main__':
-    jekyll = NanoJekyll(base_dir = '../../')
+    jekyll = NanoJekyll()
     print(jekyll.render_layout(ctx = dict(page = dict(title = 'asd'), content = 'fgh'), layout = 'page.html'))
     print(jekyll.render_layout(ctx = dict(page = dict(lang = 'asd'), site = dict(lang = 'klm'), content = 'fgh'), layout = 'base.html'))
