@@ -1,4 +1,4 @@
-minima_template_base = '''
+minima_layout_base = '''
 <!DOCTYPE html>
 <html lang="{{ page.lang | default: site.lang | default: "en" }}">
 
@@ -249,8 +249,7 @@ minima_template_base = '''
 </html>
 '''
 
-
-minima_template_page_post = '''
+minima_layout_page = '''
 <article class="post">
 
   <header class="post-header">
@@ -262,6 +261,9 @@ minima_template_page_post = '''
   </div>
 
 </article>
+'''
+
+minima_layout_post = '''
 <article class="post h-entry" itemscope itemtype="http://schema.org/BlogPosting">
 
   <header class="post-header">

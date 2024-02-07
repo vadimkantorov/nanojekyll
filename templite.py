@@ -1,56 +1,32 @@
-"""A simple Python template renderer, for a nano-subset of Django syntax."""
-
-# Coincidentally named the same as http://code.activestate.com/recipes/496702/
+# https://github.com/aosabook/500lines/tree/master/template-engine as a starting point
 
 import re
-
+import sys
 
 class TempliteSyntaxError(ValueError):
-    """Raised when a template has a syntax error."""
     pass
 
-
 class CodeBuilder(object):
-    """Build source code conveniently."""
-
+    INDENT_STEP = 4      # PEP8 says so!
     def __init__(self, indent=0):
         self.code = []
         self.indent_level = indent
-
     def __str__(self):
         return "".join(str(c) for c in self.code)
-
     def add_line(self, line):
-        """Add a line of source to the code.
-
-        Indentation and newline will be added for you, don't provide them.
-
-        """
         self.code.extend([" " * self.indent_level, line, "\n"])
-
     def add_section(self):
-        """Add a section, a sub-CodeBuilder."""
         section = CodeBuilder(self.indent_level)
         self.code.append(section)
         return section
-
-    INDENT_STEP = 4      # PEP8 says so!
-
     def indent(self):
-        """Increase the current indent for following lines."""
         self.indent_level += self.INDENT_STEP
-
     def dedent(self):
-        """Decrease the current indent for following lines."""
         self.indent_level -= self.INDENT_STEP
-
     def get_globals(self):
-        """Execute the code, and return a dict of globals it defines."""
         # A check that the caller really finished all the blocks they started.
         assert self.indent_level == 0
-        # Get the Python source as a single string.
         python_source = str(self)
-        # Execute the source, defining globals, and return them.
         global_namespace = {}
         exec(python_source, global_namespace)
         return global_namespace
@@ -93,12 +69,6 @@ class Templite(object):
 
     """
     def __init__(self, text, *contexts):
-        """Construct a Templite with the given `text`.
-
-        `contexts` are dictionaries of values to use for future renderings.
-        These are good for filters and global values.
-
-        """
         self.context = {}
         for context in contexts:
             self.context.update(context)
@@ -109,22 +79,21 @@ class Templite(object):
         # We construct a function in source form, then compile it and hold onto
         # it, and execute it to render the template.
         code = CodeBuilder()
-
         code.add_line("def render_function(context, do_dots):")
         code.indent()
         vars_code = code.add_section()
         code.add_line("result = []")
-        code.add_line("append_result = result.append")
-        code.add_line("extend_result = result.extend")
-        code.add_line("to_str = str")
+        #code.add_line("append_result = result.append")
+        #code.add_line("extend_result = result.extend")
+        #code.add_line("to_str = str")
 
         buffered = []
         def flush_output():
             """Force `buffered` to the code builder."""
             if len(buffered) == 1:
-                code.add_line("append_result(%s)" % buffered[0])
+                code.add_line("result.append(%s)" % buffered[0])
             elif len(buffered) > 1:
-                code.add_line("extend_result([%s])" % ", ".join(buffered))
+                code.add_line("result.extend([%s])" % ", ".join(buffered))
             del buffered[:]
 
         ops_stack = []
@@ -133,13 +102,12 @@ class Templite(object):
         tokens = re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
 
         for token in tokens:
-            if token.startswith('{#'):
-                # Comment: ignore it and move on.
+            if token.startswith('{#'): # comment
                 continue
-            elif token.startswith('{{'):
-                # An expression to evaluate.
+
+            elif token.startswith('{{'): # an expression to evaluate.
                 expr = self._expr_code(token[2:-2].strip())
-                buffered.append("to_str(%s)" % expr)
+                buffered.append("str(%s)" % expr)
             elif token.startswith('{%'):
                 # Action tag: split into words and parse further.
                 flush_output()
@@ -192,12 +160,15 @@ class Templite(object):
 
         code.add_line("return ''.join(result)")
         code.dedent()
+        
+        print(str(code), file = sys.stderr)
+
         self._render_function = code.get_globals()['render_function']
 
     def _expr_code(self, expr):
-        """Generate a Python expression for `expr`."""
+        #print('_expr_code:', expr)
         if "|" in expr:
-            pipes = expr.split("|")
+            pipes = list(map(str.strip, expr.split("|")))
             code = self._expr_code(pipes[0])
             for func in pipes[1:]:
                 self._variable(func, self.all_vars)
@@ -213,35 +184,20 @@ class Templite(object):
         return code
 
     def _syntax_error(self, msg, thing):
-        """Raise a syntax error using `msg`, and showing `thing`."""
         raise TempliteSyntaxError("%s: %r" % (msg, thing))
 
     def _variable(self, name, vars_set):
-        """Track that `name` is used as a variable.
-
-        Adds the name to `vars_set`, a set of variable names.
-
-        Raises an syntax error if `name` is not a valid name.
-
-        """
         if not re.match(r"[_a-zA-Z][_a-zA-Z0-9]*$", name):
             self._syntax_error("Not a valid name", name)
         vars_set.add(name)
 
     def render(self, context=None):
-        """Render this template by applying it to `context`.
-
-        `context` is a dictionary of values to use in this rendering.
-
-        """
-        # Make the complete context we'll use.
         render_context = dict(self.context)
         if context:
             render_context.update(context)
         return self._render_function(render_context, self._do_dots)
 
     def _do_dots(self, value, *dots):
-        """Evaluate dotted expressions at runtime."""
         for dot in dots:
             try:
                 value = getattr(value, dot)
