@@ -75,16 +75,6 @@ class Templite(object):
         code.indent()
         vars_code = code.add_section()
         code.add_line("result = []")
-
-        #buffered = []
-        #def flush_output():
-        #    """Force `buffered` to the code builder."""
-        #    if len(buffered) == 1:
-        #        code.add_line("result.append(%s)" % buffered[0])
-        #    elif len(buffered) > 1:
-        #        code.add_line("result.extend([%s])" % ", ".join(buffered))
-        #    del buffered[:]
-
         ops_stack = []
 
         # Split the text to form a list of tokens.
@@ -114,6 +104,7 @@ class Templite(object):
                 if words[0] == 'if':
                     # An if statement: evaluate the expression to determine if.
                     if len(words) != 2:
+                        breakpoint()
                         self._syntax_error("Don't understand if", token)
                     ops_stack.append('if')
                     code.add_line("if %s:" % self._expr_code(words[1]))
