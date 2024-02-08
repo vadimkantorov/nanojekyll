@@ -80,19 +80,21 @@ class Templite(object):
         i = 0;
         while i < len(tokens):
             token = tokens[i]
+            b = 3 if token.startswith('{%-') or token.startswith('{{-') else 2
+            e = -3 if token.endswith('-%}') or token.endswith('-}}') else -2
+
             if token.startswith('{#'): # comment
                 i += 1
                 continue
 
             elif token.startswith('{{'): # an expression to evaluate.
-                expr = self._expr_code(token[2:-2].strip())
+                token_inner = token[b:e].strip()
+                expr = self._expr_code(token_inner)
                 code.add_line("result.append(%s)" % ("str(%s)" % expr))
 
             elif token.startswith('{%'):
                 # Action tag: split into words and parse further.
                 #flush_output()
-                b = 3 if token.startswith('{%-') else 2
-                e = -3 if token.endswith('-%}') else -2
                 token_inner = token[b:e].strip()
                 words = token_inner.split()
                 #TODO: whitespace control not supported for now
@@ -109,13 +111,21 @@ class Templite(object):
                     code.add_line("if %s:" % self._expr_code(words[1]))
                     code.indent()
                 
+                elif words[0] == 'unless':
+                    # An if statement: evaluate the expression to determine if.
+                    if len(words) != 2:
+                        self._syntax_error("Don't understand unless", token)
+                    ops_stack.append('unless')
+                    code.add_line("if not %s:" % self._expr_code(words[1]))
+                    code.indent()
+                
                 elif words[0] == 'for':
                     # A loop: iterate over expression result.
                     if len(words) != 4 or words[2] != 'in':
                         self._syntax_error("Don't understand for", token)
                     ops_stack.append('for')
                     self._variable(words[1], self.loop_vars)
-                    code.add_line("for c_%s in %s:" % (words[1], self._expr_code(words[3]) ) )
+                    code.add_line("for %s in %s:" % (words[1], self._expr_code(words[3]) ) )
                     code.indent()
                 
                 elif words[0].startswith('end'):
@@ -137,10 +147,7 @@ class Templite(object):
                 
                 elif words[0] == 'assign':
                     assert words[2] == '='
-                    try:
-                        expr = self._expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
-                    except:
-                        breakpoint()
+                    expr = self._expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
                     var_name = words[1]
                     code.add_line('%s = %s' % (var_name, expr))
                     self._variable(var_name, self.all_vars)
@@ -155,14 +162,13 @@ class Templite(object):
                 # Literal content.  If it isn't empty, output it.
                 if token:
                     code.add_line("result.append(%s)" % (repr(token)))
-                    #buffered.append(repr(token))
             i += 1
 
         if ops_stack:
             self._syntax_error("Unmatched action tag", ops_stack[-1])
 
         for var_name in self.all_vars - self.loop_vars:
-            vars_code.add_line("c_%s = context[%r]" % (var_name, var_name))
+            vars_code.add_line("%s = context[%r]" % (var_name, var_name))
 
         code.add_line("return ''.join(result)")
         code.dedent()
@@ -185,10 +191,13 @@ class Templite(object):
                 func_name, *func_args = func.split(':', maxsplit = 1)
                 self._variable(func_name, self.all_vars)
                 if not func_args:
-                    code = "c_%s(%s)" % (func_name, code)
+                    code = f"context['{func_name}']({code})"
+                    #code = "c_%s(%s)" % (func_name, code)
                 else:
                     assert len(func_args) == 1
-                    code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
+                    func_args = ','.join(map(self._expr_code, func_args[0].split(',')))
+                    code = f"context['{func_name}']({code}, {func_args})"
+                    #code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
                     
         elif "." in expr:
             dots = expr.split(".")
@@ -197,7 +206,7 @@ class Templite(object):
             code = "do_dots(%s, %s)" % (code, args)
         else:
             self._variable(expr, self.all_vars)
-            code = "c_%s" % expr
+            code = "%s" % expr
         return code
 
     def _syntax_error(self, msg, thing):
