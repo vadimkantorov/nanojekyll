@@ -68,7 +68,7 @@ class Templite(object):
         # We construct a function in source form, then compile it and hold onto
         # it, and execute it to render the template.
         code = CodeBuilder()
-        code.add_line("def render_function(context, do_dots):")
+        code.add_line("def render_function(context):")
         code.indent()
         vars_code = code.add_section()
         code.add_line("result = []")
@@ -200,10 +200,10 @@ class Templite(object):
                     #code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
                     
         elif "." in expr:
-            dots = expr.split(".")
-            code = self._expr_code(dots[0])
-            args = ", ".join(repr(d) for d in dots[1:])
-            code = "do_dots(%s, %s)" % (code, args)
+            self._variable(expr.split(".")[0], self.all_vars)
+            code = expr
+            #args = ", ".join(repr(d) for d in dots[1:])
+            #code = "do_dots(%s, %s)" % (code, args)
         else:
             self._variable(expr, self.all_vars)
             code = "%s" % expr
@@ -221,14 +221,14 @@ class Templite(object):
         render_context = dict(self.context)
         if context:
             render_context.update(context)
-        return self._render_function(render_context, self._do_dots)
+        return self._render_function(render_context)
 
-    def _do_dots(self, value, *dots):
-        for dot in dots:
-            try:
-                value = getattr(value, dot)
-            except AttributeError:
-                value = value[dot]
-            if callable(value):
-                value = value()
-        return value
+    #def _do_dots(self, value, *dots):
+    #    for dot in dots:
+    #        try:
+    #            value = getattr(value, dot)
+    #        except AttributeError:
+    #            value = value[dot]
+    #        if callable(value):
+    #            value = value()
+    #    return value
