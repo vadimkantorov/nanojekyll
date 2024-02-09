@@ -1,7 +1,7 @@
 """Tests for templite."""
 
 import re
-from templite import Templite, TempliteSyntaxError
+from jekyll import Templite
 from unittest import TestCase
 
 # pylint: disable=W0612,E1101
@@ -34,7 +34,7 @@ class TempliteTest(TestCase):
 
     def assertSynErr(self, msg):
         pat = "^" + re.escape(msg) + "$"
-        return self.assertRaisesRegex(TempliteSyntaxError, pat)
+        return self.assertRaisesRegex(ValueError, pat)
 
     def test_passthrough(self):
         # Strings without variables are passed through unchanged.
