@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import html
 
 attrdict = type('attrdict', (dict, ), dict(__getattr__ = dict.__getitem__, __setattr__ = dict.__setitem__)) 
 
@@ -37,29 +38,6 @@ class Templite:
     def split_tokens(text):
         return re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
 
-    #A simple template renderer, for a nano-subset of Django syntax.
-    #Supported constructs are extended variable access::
-    #    {{var.modifer.modifier|filter|filter}}
-    #loops::
-    #    {% for var in list %}...{% endfor %}
-    #and ifs::
-    #    {% if var %}...{% endif %}
-    #Comments are within curly-hash markers::
-    #    {# This will be ignored #}
-    #Construct a Templite with the template text, then use `render` against a
-    #dictionary context to create a finished string::
-    #    templite = Templite('''
-    #        <h1>Hello {{name|upper}}!</h1>
-    #        {% for topic in topics %}
-    #            <p>You are interested in {{topic}}.</p>
-    #        {% endif %}
-    #        ''',
-    #        {'upper': str.upper},
-    #    )
-    #    text = templite.render({
-    #        'name': "Ned",
-    #        'topics': ['Python', 'Geometry', 'Juggling'],
-    #    })
     def __init__(self, text, *contexts):
         self.context = {}
         for context in contexts:
@@ -68,16 +46,19 @@ class Templite:
         self.all_vars = set()
         self.loop_vars = set()
 
-        # We construct a function in source form, then compile it and hold onto
-        # it, and execute it to render the template.
         code = CodeBuilder()
         code.add_line("def render_function(context):")
         code.indent()
         vars_code = code.add_section()
+        code.add_line('globals().update(context)')
+        code.add_line('class TrimLeft(str): pass')
+        code.add_line('class TrimRight(str): pass')
+        code.add_line('nil, false, true = None, False, True')
+        code.add_line('class forloop: index = 1')
         code.add_line("result = []")
+        code.add_line("")
         ops_stack = []
 
-        # Split the text to form a list of tokens.
         tokens = self.split_tokens(text)
         
         i = 0;
@@ -85,12 +66,15 @@ class Templite:
             token = tokens[i]
             b = 3 if token.startswith('{%-') or token.startswith('{{-') else 2
             e = -3 if token.endswith('-%}') or token.endswith('-}}') else -2
+            
+            if b == 3:
+                code.add_line("result.append(TrimLeft())")
 
-            if token.startswith('{#'): # comment
+            if token.startswith('{#'):
                 i += 1
                 continue
 
-            elif token.startswith('{{'): # an expression to evaluate.
+            elif token.startswith('{{'):
                 token_inner = token[b:e].strip()
                 expr = self._expr_code(token_inner)
                 code.add_line("result.append(%s)" % ("str(%s)" % expr))
@@ -100,7 +84,6 @@ class Templite:
                 #flush_output()
                 token_inner = token[b:e].strip()
                 words = token_inner.split()
-                #TODO: whitespace control not supported for now
                 if words[0] == '-':
                     del words[0]
                 if words[-1] == '-':
@@ -108,18 +91,18 @@ class Templite:
 
                 if words[0] == 'if':
                     # An if statement: evaluate the expression to determine if.
-                    if len(words) != 2:
-                        self._syntax_error("Don't understand if", token)
+                    #if len(words) != 2:
+                    #    self._syntax_error("Don't understand if", token)
                     ops_stack.append('if')
-                    code.add_line("if %s:" % self._expr_code(words[1]))
+                    code.add_line("if {}:".format(' '.join(words[1:])))
                     code.indent()
                 
                 elif words[0] == 'unless':
                     # An if statement: evaluate the expression to determine if.
-                    if len(words) != 2:
-                        self._syntax_error("Don't understand unless", token)
+                    #if len(words) != 2:
+                    #    self._syntax_error("Don't understand unless", token)
                     ops_stack.append('unless')
-                    code.add_line("if not %s:" % self._expr_code(words[1]))
+                    code.add_line("if not( {} ):".format(' '.join(words[1:])))
                     code.indent()
                 
                 elif words[0] == 'for':
@@ -127,7 +110,7 @@ class Templite:
                     if len(words) != 4 or words[2] != 'in':
                         self._syntax_error("Don't understand for", token)
                     ops_stack.append('for')
-                    self._variable(words[1], self.loop_vars)
+                    #self._variable(words[1], self.loop_vars)
                     code.add_line("for %s in %s:" % (words[1], self._expr_code(words[3]) ) )
                     code.indent()
                 
@@ -153,7 +136,7 @@ class Templite:
                     expr = self._expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
                     var_name = words[1]
                     code.add_line('%s = %s' % (var_name, expr))
-                    self._variable(var_name, self.all_vars)
+                    #self._variable(var_name, self.all_vars)
 
 
                 elif words[0] == 'seo':
@@ -161,10 +144,13 @@ class Templite:
         
                 else:
                     self._syntax_error("Don't understand tag", words[0])
+
             else:
-                # Literal content.  If it isn't empty, output it.
                 if token:
                     code.add_line("result.append(%s)" % (repr(token)))
+            
+            if e == -3:
+                code.add_line("result.append(TrimRight())")
             i += 1
 
         if ops_stack:
@@ -177,12 +163,12 @@ class Templite:
         code.dedent()
         
         print(str(code), file = sys.stderr)
+        print(str(code), file = open('render.py', 'w'))
 
         self._render_function = code.get_globals()['render_function']
 
     def _expr_code(self, expr):
         expr = expr.strip()
-        #print('_expr_code:', expr)
         if expr.startswith('"') and expr.endswith('"'):
             return expr
         elif expr.startswith("'") and expr.endswith("'"):
@@ -192,23 +178,24 @@ class Templite:
             code = self._expr_code(pipes[0])
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
-                self._variable(func_name, self.all_vars)
+                #self._variable(func_name, self.all_vars)
                 if not func_args:
-                    code = f"context['{func_name}']({code})"
+                    code = f"{func_name}({code})"
+                    #code = f"context['{func_name}']({code})"
                     #code = "c_%s(%s)" % (func_name, code)
                 else:
                     assert len(func_args) == 1
-                    func_args = ','.join(map(self._expr_code, func_args[0].split(',')))
-                    code = f"context['{func_name}']({code}, {func_args})"
+                    func_args = ', '.join(map(self._expr_code, func_args[0].split(',')))
+                    code = f"{func_name}({code}, {func_args})"
                     #code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
                     
         elif "." in expr:
-            self._variable(expr.split(".")[0], self.all_vars)
+            #self._variable(expr.split(".")[0], self.all_vars)
             code = expr
             #args = ", ".join(repr(d) for d in dots[1:])
             #code = "do_dots(%s, %s)" % (code, args)
         else:
-            self._variable(expr, self.all_vars)
+            #self._variable(expr, self.all_vars)
             code = "%s" % expr
         return code
 
@@ -225,16 +212,6 @@ class Templite:
         if context:
             render_context.update(context)
         return self._render_function(render_context)
-
-    #def _do_dots(self, value, *dots):
-    #    for dot in dots:
-    #        try:
-    #            value = getattr(value, dot)
-    #        except AttributeError:
-    #            value = value[dot]
-    #        if callable(value):
-    #            value = value()
-    #    return value
 
 class NanoJekyll:
     def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts'):
@@ -260,56 +237,102 @@ class NanoJekyll:
 
         return front_matter, template
 
+    @staticmethod
+    def extract_layout_from_frontmatter(frontmatter):
+        return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
+
     def render_layout(self, ctx = {}, layout = ''):
-        frontmatter_layout, template_layout = self.layouts[layout]
-        filters = dict(escape = self.escape, relative_url = self.relative_url, absolute_url = self.absolute_url, default = self.default, where = self.where, map = self.map, append = self.append, first = self.first, size = self.size, join = self.join)
-        actual = Templite(template_layout, dict(includes = self.includes)).render(context = ctx | filters)
-        return actual
-        
+        filters = dict(
+            escape = JekyllFilters.escape, 
+            relative_url = JekyllFilters.relative_url, 
+            absolute_url = JekyllFilters.absolute_url, 
+            default = JekyllFilters.default, 
+            where = JekyllFilters.where, 
+            map = JekyllFilters.map, 
+            append = JekyllFilters.append, 
+            first = JekyllFilters.first, 
+            size = JekyllFilters.size, 
+            join = JekyllFilters.join
+        )
+       
+        content = ''
+        while layout:
+            frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
+            content = Templite(template, dict(includes = self.includes)).render(context = ctx | filters | dict(content = content))
+            layout = self.extract_layout_from_frontmatter(frontmatter)
+        return content
+
+class JekyllFilters:
     # https://shopify.github.io/liquid/basics/operators/
     # https://jekyllrb.com/docs/liquid/filters/
+    
+    @staticmethod
+    def date_to_xmlschema(dt):
+        pass
+
+    @staticmethod
+    def date(dt):
+        pass
+
+    @staticmethod
+    def relative_url(url):
+        # https://jekyllrb.com/docs/liquid/filters/
+        return url
+
+    @staticmethod
+    def absolute_url(url):
+        # https://jekyllrb.com/docs/liquid/filters/
+        return url
 
     @staticmethod
     def escape(s):
-        return s
+        # https://shopify.github.io/liquid/filters/escape/
+        return html.escape(s)
     
     @staticmethod
-    def relative_url():
-        pass
-
-    @staticmethod
-    def absolute_url():
-        pass
-
-    @staticmethod
     def default(s, t):
+        # https://shopify.github.io/liquid/filters/default/
         return s or t
 
     @staticmethod
     def where(xs, key, value):
+        # https://shopify.github.io/liquid/filters/where/
         return [x for x in xs if x[key] == value]
 
     @staticmethod
     def map(xs, key):
+        # https://shopify.github.io/liquid/filters/map/
         return [x[key] for x in xs]
     
     @staticmethod
     def append(xs, item):
+        # https://shopify.github.io/liquid/filters/append/
         return xs.append(item) or xs
 
     @staticmethod
     def first(xs):
+        # https://shopify.github.io/liquid/filters/first/
         return xs[0]
 
     @staticmethod
     def size(xs):
+        # https://shopify.github.io/liquid/filters/size/
         return len(xs)
 
     @staticmethod
     def join(xs, sep):
+        # https://shopify.github.io/liquid/filters/join/
         return sep.join(map(str, xs))
 
 if __name__ == '__main__':
     jekyll = NanoJekyll()
-    print(jekyll.render_layout(ctx = attrdict(page = attrdict(title = 'asd'), content = 'fgh'), layout = 'page.html'))
-    print(jekyll.render_layout(ctx = attrdict(page = attrdict(lang = 'asd'), site = attrdict(lang = 'klm'), content = 'fgh'), layout = 'base.html'))
+    
+    ctx = attrdict(
+        content = 'fgh',
+
+        page = attrdict(lang = 'asd', title = 'def'), 
+        site = attrdict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = attrdict(path = 'klm'), author = None, description = 'opq', minima = attrdict(social_links = [])), 
+        jekyll = attrdict(environment = attrdict()),
+    )
+    print(jekyll.render_layout(ctx = ctx, layout = 'base.html'))
+    print(jekyll.render_layout(ctx = ctx, layout = 'page.html'))
