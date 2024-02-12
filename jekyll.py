@@ -313,7 +313,7 @@ class NanoJekyll:
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = Templite(template, dict(includes = self.includes)).render(context = ctx | filters | dict(content = content))
+            content = Templite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
 
