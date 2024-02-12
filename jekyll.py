@@ -3,9 +3,8 @@
 import os
 import re
 import sys
+import datetime
 import html
-
-attrdict = type('attrdict', (dict, ), dict(__getattr__ = dict.__getitem__, __setattr__ = dict.__setitem__)) 
 
 class CodeBuilder:
     INDENT_STEP = 4
@@ -55,6 +54,7 @@ class Templite:
         code.add_line('class TrimRight(str): pass')
         code.add_line('nil, false, true = None, False, True')
         code.add_line('class forloop: index = 1')
+        code.add_line('''def finalize_result(result): return "\\n".join(result)''')
         code.add_line("result = []")
         code.add_line("")
         ops_stack = []
@@ -90,17 +90,17 @@ class Templite:
                     del words[-1]
 
                 if words[0] == 'if':
-                    # An if statement: evaluate the expression to determine if.
-                    #if len(words) != 2:
-                    #    self._syntax_error("Don't understand if", token)
                     ops_stack.append('if')
                     code.add_line("if {}:".format(' '.join(words[1:])))
                     code.indent()
                 
+                elif words[0] == 'else':
+                    #ops_stack.append('else')
+                    code.dedent()
+                    code.add_line("else:".format(' '.join(words[1:])))
+                    code.indent()
+                
                 elif words[0] == 'unless':
-                    # An if statement: evaluate the expression to determine if.
-                    #if len(words) != 2:
-                    #    self._syntax_error("Don't understand unless", token)
                     ops_stack.append('unless')
                     code.add_line("if not( {} ):".format(' '.join(words[1:])))
                     code.indent()
@@ -123,6 +123,7 @@ class Templite:
                         self._syntax_error("Too many ends", token)
                     start_what = ops_stack.pop()
                     if start_what != end_what:
+                        print('start:', start_what, 'end:', end_what)
                         self._syntax_error("Mismatched end tag", end_what)
                     code.dedent()
 
@@ -159,7 +160,7 @@ class Templite:
         for var_name in self.all_vars - self.loop_vars:
             vars_code.add_line("%s = context[%r]" % (var_name, var_name))
 
-        code.add_line("return ''.join(result)")
+        code.add_line("return finalize_result(result)")
         code.dedent()
         
         print(str(code), file = sys.stderr)
@@ -213,66 +214,9 @@ class Templite:
             render_context.update(context)
         return self._render_function(render_context)
 
-class NanoJekyll:
-    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts'):
-        self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
-        self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
-
-    @staticmethod
-    def read_template(path, front_matter_sep = '---\n'):
-        front_matter = ''
-        template = ''
-        with open(path) as f:
-            line = f.readline()
-
-            if line == front_matter_sep:
-                front_matter += front_matter_sep
-                while (line := f.readline()) != front_matter_sep:
-                    front_matter += line
-                front_matter += front_matter_sep
-            else:
-                template += line
-
-            template += f.read()
-
-        return front_matter, template
-
-    @staticmethod
-    def extract_layout_from_frontmatter(frontmatter):
-        return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
-
-    def render_layout(self, ctx = {}, layout = ''):
-        filters = dict(
-            escape = JekyllFilters.escape, 
-            relative_url = JekyllFilters.relative_url, 
-            absolute_url = JekyllFilters.absolute_url, 
-            default = JekyllFilters.default, 
-            where = JekyllFilters.where, 
-            map = JekyllFilters.map, 
-            append = JekyllFilters.append, 
-            first = JekyllFilters.first, 
-            size = JekyllFilters.size, 
-            join = JekyllFilters.join
-        )
-       
-        content = ''
-        while layout:
-            frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = Templite(template, dict(includes = self.includes)).render(context = ctx | filters | dict(content = content))
-            layout = self.extract_layout_from_frontmatter(frontmatter)
-        return content
-
-class JekyllFilters:
+class NanoJekyllFilters:
     # https://shopify.github.io/liquid/basics/operators/
     # https://jekyllrb.com/docs/liquid/filters/
-    
-    @staticmethod
-    def date_to_xmlschema(dt):
-        pass
-
-    @staticmethod
-    def date(dt):
-        pass
 
     @staticmethod
     def relative_url(url):
@@ -283,6 +227,15 @@ class JekyllFilters:
     def absolute_url(url):
         # https://jekyllrb.com/docs/liquid/filters/
         return url
+    
+    @staticmethod
+    def date_to_xmlschema(dt):
+        pass
+    
+    @staticmethod
+    def date(dt, date_format):
+        # https://shopify.github.io/liquid/filters/date/
+        return dt.strftime(date_format)
 
     @staticmethod
     def escape(s):
@@ -324,15 +277,62 @@ class JekyllFilters:
         # https://shopify.github.io/liquid/filters/join/
         return sep.join(map(str, xs))
 
+
+class NanoJekyll:
+    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', filters = {}, plugins = {}):
+        self.filters = {}
+        self.plugins = {}
+        self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
+        self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
+
+    @staticmethod
+    def read_template(path, front_matter_sep = '---\n'):
+        front_matter = ''
+        template = ''
+        with open(path) as f:
+            line = f.readline()
+
+            if line == front_matter_sep:
+                front_matter += front_matter_sep
+                while (line := f.readline()) != front_matter_sep:
+                    front_matter += line
+                front_matter += front_matter_sep
+            else:
+                template += line
+
+            template += f.read()
+
+        return front_matter, template
+
+    @staticmethod
+    def extract_layout_from_frontmatter(frontmatter):
+        return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
+
+    def render_layout(self, ctx = {}, layout = ''):
+        filters = self.filters | NanoJekyllFilters.__dict__
+        content = ''
+        while layout:
+            frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
+            content = Templite(template, dict(includes = self.includes)).render(context = ctx | filters | dict(content = content))
+            layout = self.extract_layout_from_frontmatter(frontmatter)
+        return content
+
+attrdict = type('attrdict', (dict, ), dict(__getattr__ = dict.__getitem__, __setattr__ = dict.__setitem__)) 
+jekylllist = type('jekylllist', (list, ), dict(size = property(list.__len__)))
+
 if __name__ == '__main__':
     jekyll = NanoJekyll()
     
     ctx = attrdict(
         content = 'fgh',
 
-        page = attrdict(lang = 'asd', title = 'def'), 
-        site = attrdict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = attrdict(path = 'klm'), author = None, description = 'opq', minima = attrdict(social_links = [])), 
+        paginator = attrdict(),
+
+        page = attrdict(lang = 'asd', title = 'def', date = datetime.datetime(2024, 2, 12, 13, 27, 16, 182792), modified_date = None, author = None, url = ''), 
+        site = attrdict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = attrdict(path = 'klm'), author = None, description = 'opq', minima = attrdict(social_links = [], date_format = "%b %-d, %Y"), disqus = attrdict(shortname = None), paginate = False, posts = jekylllist([]) ), 
         jekyll = attrdict(environment = attrdict()),
     )
     print(jekyll.render_layout(ctx = ctx, layout = 'base.html'))
     print(jekyll.render_layout(ctx = ctx, layout = 'page.html'))
+    print(jekyll.render_layout(ctx = ctx, layout = 'post.html'))
+    print(jekyll.render_layout(ctx = ctx, layout = 'home.html'))
