@@ -1,3 +1,7 @@
+# https://github.com/jekyll/jekyll-seo-tag/blob/master/lib/template.html
+# https://github.com/jekyll/jekyll-sitemap
+# https://github.com/jekyll/jekyll-feed/blob/master/lib/jekyll-feed/generator.rb
+
 minima_layout_base = '''
 <!DOCTYPE html>
 <html lang="{{ page.lang | default: site.lang | default: "en" }}">
