@@ -321,6 +321,7 @@ attrdict = type('attrdict', (dict, ), dict(__getattr__ = dict.__getitem__, __set
 jekylllist = type('jekylllist', (list, ), dict(size = property(list.__len__)))
 
 if __name__ == '__main__':
+    # https://jekyllrb.com/docs/rendering-process/
     jekyll = NanoJekyll()
     
     ctx = attrdict(
@@ -332,7 +333,7 @@ if __name__ == '__main__':
         site = attrdict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = attrdict(path = 'klm'), author = None, description = 'opq', minima = attrdict(social_links = [], date_format = "%b %-d, %Y"), disqus = attrdict(shortname = None), paginate = False, posts = jekylllist([]) ), 
         jekyll = attrdict(environment = attrdict()),
     )
-    print(jekyll.render_layout(ctx = ctx, layout = 'base.html'))
     print(jekyll.render_layout(ctx = ctx, layout = 'page.html'))
-    print(jekyll.render_layout(ctx = ctx, layout = 'post.html'))
-    print(jekyll.render_layout(ctx = ctx, layout = 'home.html'))
+    #print(jekyll.render_layout(ctx = ctx, layout = 'base.html'))
+    #print(jekyll.render_layout(ctx = ctx, layout = 'post.html'))
+    #print(jekyll.render_layout(ctx = ctx, layout = 'home.html'))
