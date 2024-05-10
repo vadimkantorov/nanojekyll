@@ -3,10 +3,11 @@
 import os
 import re
 import sys
+import inspect
 import datetime
 import html
 
-class CodeBuilder:
+class NanoJekyllCodeBuilder:
     INDENT_STEP = 4
     def __init__(self, indent=0):
         self.code = []
@@ -16,7 +17,7 @@ class CodeBuilder:
     def add_line(self, line):
         self.code.extend([" " * self.indent_level, line, "\n"])
     def add_section(self):
-        section = CodeBuilder(self.indent_level)
+        section = NanoJekyllCodeBuilder(self.indent_level)
         self.code.append(section)
         return section
     def indent(self):
@@ -31,25 +32,26 @@ class CodeBuilder:
         exec(python_source, global_namespace)
         return global_namespace
 
-
-class Templite:
+class NanoJekyllTemplite:
     @staticmethod
     def split_tokens(text):
         return re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
 
-    def __init__(self, text, *contexts):
-        self.context = {}
-        for context in contexts:
-            self.context.update(context)
+    def __init__(self, text, filters = {}, ctx = {}):
+        self.filters = filters
+        self.ctx = ctx
+        self.context = self.filters | self.ctx
 
         self.all_vars = set()
         self.loop_vars = set()
 
-        code = CodeBuilder()
-        code.add_line("def render_function(context):")
+        code = NanoJekyllCodeBuilder()
+        code.add_line(inspect.getsource(NanoJekyllValue))
+        code.add_line("def render_function(filters = {}, ctx = {}):")
         code.indent()
         vars_code = code.add_section()
-        code.add_line('globals().update(context)')
+        code.add_line('globals().update(filters)')
+        code.add_line('globals().update({k : NanoJekyllValue(v) for k, v in ctx.items()})')
         code.add_line('class TrimLeft(str): pass')
         code.add_line('class TrimRight(str): pass')
         code.add_line('nil, false, true = None, False, True')
@@ -166,7 +168,7 @@ class Templite:
         print(str(code), file = sys.stderr)
         print(str(code), file = open('render.py', 'w'))
 
-        self._render_function = code.get_globals()['render_function']
+        self.render_function = code.get_globals()['render_function']
 
     def _expr_code(self, expr):
         expr = expr.strip()
@@ -209,12 +211,34 @@ class Templite:
         vars_set.add(name)
 
     def render(self, context=None):
-        render_context = dict(self.context)
-        if context:
-            render_context.update(context)
-        return self._render_function(render_context)
+        return self.render_function(self.filters, self.ctx | (context or {}))
 
-class NanoJekyllFilters:
+class NanoJekyllValue:
+    def __init__(self, val = None):
+        self.val = val
+    
+    def __or__(self, other):
+        return NanoJekyllValue(other[0](self.val, *other[1:]))
+
+    def __str__(self):
+        return str(self.val) if self.val else ''
+
+    def __bool__(self):
+        return bool(self.val)
+    
+    def __getattr__(self, key):
+        return NanoJekyllValue(getattr(self.val, key, None))
+
+    def __len__(self):
+        return len(self.val) if isinstance(self.val, (list, dict, str)) else None
+
+    def __iter__(self):
+        yield from (self.val if self.val else [])
+
+    @staticmethod
+    def pipify(f):
+        return (lambda *args: (f, *args))
+    
     # https://shopify.github.io/liquid/basics/operators/
     # https://jekyllrb.com/docs/liquid/filters/
 
@@ -240,7 +264,7 @@ class NanoJekyllFilters:
     @staticmethod
     def escape(s):
         # https://shopify.github.io/liquid/filters/escape/
-        return html.escape(s)
+        return html.escape(str(s))
     
     @staticmethod
     def default(s, t):
@@ -255,7 +279,7 @@ class NanoJekyllFilters:
     @staticmethod
     def map(xs, key):
         # https://shopify.github.io/liquid/filters/map/
-        return [x[key] for x in xs]
+        return [x[key] for x in xs] if xs else []
     
     @staticmethod
     def append(xs, item):
@@ -277,6 +301,49 @@ class NanoJekyllFilters:
         # https://shopify.github.io/liquid/filters/join/
         return sep.join(map(str, xs))
 
+    @staticmethod
+    def remove(x, y):
+        return x.replace(y, '')
+
+    @staticmethod
+    def jsonify(x):
+        return json.dumps(x, ensure_ascii = False)
+
+    @staticmethod
+    def xml_escape(x):
+        return x
+
+    @staticmethod
+    def capitalize(x):
+        return x
+
+    @staticmethod
+    def smartify(x):
+        return x
+
+    @staticmethod
+    def where_exp(x, y):
+        return x
+
+    @staticmethod
+    def sort(x):
+        return sorted(x)
+    
+    @staticmethod
+    def reverse(x):
+        return list(reversed(x))
+
+    @staticmethod
+    def strip(x):
+        return x
+
+    @staticmethod
+    def strip_html(x):
+        return x
+
+    @staticmethod
+    def normalize_whitespace(x):
+        return x
 
 class NanoJekyll:
     def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', filters = {}, plugins = {}):
@@ -309,29 +376,26 @@ class NanoJekyll:
         return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
 
     def render_layout(self, ctx = {}, layout = ''):
-        filters = self.filters | NanoJekyllFilters.__dict__
+        filters = self.filters | NanoJekyllValue.__dict__
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = Templite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
+            content = NanoJekyllTemplite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
-
-attrdict = type('attrdict', (dict, ), dict(__getattr__ = dict.__getitem__, __setattr__ = dict.__setitem__)) 
-jekylllist = type('jekylllist', (list, ), dict(size = property(list.__len__)))
 
 if __name__ == '__main__':
     # https://jekyllrb.com/docs/rendering-process/
     jekyll = NanoJekyll()
     
-    ctx = attrdict(
+    ctx = dict(
         content = 'fgh',
 
-        paginator = attrdict(),
+        paginator = dict(),
 
-        page = attrdict(lang = 'asd', title = 'def', date = datetime.datetime(2024, 2, 12, 13, 27, 16, 182792), modified_date = None, author = None, url = ''), 
-        site = attrdict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = attrdict(path = 'klm'), author = None, description = 'opq', minima = attrdict(social_links = [], date_format = "%b %-d, %Y"), disqus = attrdict(shortname = None), paginate = False, posts = jekylllist([]) ), 
-        jekyll = attrdict(environment = attrdict()),
+        page = dict(lang = 'asd', title = 'def', date = datetime.datetime(2024, 2, 12, 13, 27, 16, 182792), modified_date = None, author = None, url = ''), 
+        site = dict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = dict(path = 'klm'), author = None, description = 'opq', minima = dict(social_links = [], date_format = "%b %-d, %Y"), disqus = dict(shortname = None), paginate = False, posts = [] ), 
+        jekyll = dict(environment = dict()),
     )
     print(jekyll.render_layout(ctx = ctx, layout = 'page.html'))
     #print(jekyll.render_layout(ctx = ctx, layout = 'base.html'))
