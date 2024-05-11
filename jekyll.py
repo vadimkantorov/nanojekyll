@@ -13,9 +13,9 @@ class NanoJekyllCodeBuilder:
         self.code = []
         self.indent_level = indent
     def __str__(self):
-        return "".join(str(c) for c in self.code)
+        return ''.join(str(c) for c in self.code)
     def add_line(self, line):
-        self.code.extend([" " * self.indent_level, line, "\n"])
+        self.code.extend([' ' * self.indent_level, line, "\n"])
     def add_section(self):
         section = NanoJekyllCodeBuilder(self.indent_level)
         self.code.append(section)
@@ -82,7 +82,7 @@ class NanoJekyllTemplite:
             elif token.startswith('{{'):
                 token_inner = token[b:e].strip()
                 expr = self._expr_code(token_inner)
-                code.add_line("result.append(%s)" % ("str(%s)" % expr))
+                code.add_line(f"result.append(str({expr}))")
 
             elif token.startswith('{%'):
                 # Action tag: split into words and parse further.
@@ -116,7 +116,7 @@ class NanoJekyllTemplite:
                         self._syntax_error("Don't understand for", token)
                     ops_stack.append('for')
                     #self._variable(words[1], self.loop_vars)
-                    code.add_line("for %s in %s:" % (words[1], self._expr_code(words[3]) ) )
+                    code.add_line("for {} in {}:".format(words[1], self._expr_code(words[3]) ) )
                     code.indent()
                 
                 elif words[0].startswith('end'):
@@ -141,7 +141,7 @@ class NanoJekyllTemplite:
                     assert words[2] == '='
                     expr = self._expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
                     var_name = words[1]
-                    code.add_line('%s = %s' % (var_name, expr))
+                    code.add_line('{} = {}'.format(var_name, expr))
                     #self._variable(var_name, self.all_vars)
 
 
@@ -153,7 +153,7 @@ class NanoJekyllTemplite:
 
             else:
                 if token:
-                    code.add_line("result.append(%s)" % (repr(token)))
+                    code.add_line("result.append({})".format(repr(token)))
             
             if e == -3:
                 code.add_line("result.append(TrimRight())")
@@ -208,7 +208,7 @@ class NanoJekyllTemplite:
         return code
 
     def _syntax_error(self, msg, thing):
-        raise ValueError("%s: %r" % (msg, thing))
+        raise ValueError(f"{msg}: {thing=}")
 
     def _variable(self, name, vars_set):
         if not re.match(r"[_a-zA-Z][_a-zA-Z0-9]*$", name):
@@ -383,6 +383,7 @@ class NanoJekyll:
         return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
 
     def render_layout(self, ctx = {}, layout = ''):
+        # https://jekyllrb.com/docs/rendering-process/
         filters = self.filters# | NanoJekyllValue.__dict__
         content = ''
         while layout:
@@ -390,21 +391,3 @@ class NanoJekyll:
             content = NanoJekyllTemplite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
-
-if __name__ == '__main__':
-    # https://jekyllrb.com/docs/rendering-process/
-    jekyll = NanoJekyll()
-    
-    ctx = dict(
-        content = 'fgh',
-
-        paginator = dict(),
-
-        page = dict(lang = 'asd', title = 'def', date = datetime.datetime(2024, 2, 12, 13, 27, 16, 182792), modified_date = None, author = None, url = ''), 
-        site = dict(lang = 'klm', pages = [], header_pages = [], title = 'def', feed = dict(path = 'klm'), author = None, description = 'opq', minima = dict(social_links = [], date_format = "%b %-d, %Y"), disqus = dict(shortname = None), paginate = False, posts = [] ), 
-        jekyll = dict(environment = dict()),
-    )
-    print(jekyll.render_layout(ctx = ctx, layout = 'page.html'))
-    #print(jekyll.render_layout(ctx = ctx, layout = 'base.html'))
-    #print(jekyll.render_layout(ctx = ctx, layout = 'post.html'))
-    #print(jekyll.render_layout(ctx = ctx, layout = 'home.html'))
