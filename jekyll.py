@@ -26,7 +26,7 @@ class NanoJekyllCodeBuilder:
         self.indent_level -= self.INDENT_STEP
     def get_globals(self):
         # A check that the caller really finished all the blocks they started.
-        assert self.indent_level == 0
+        #assert self.indent_level == 0
         python_source = str(self)
         global_namespace = {}
         exec(python_source, global_namespace)
@@ -46,12 +46,15 @@ class NanoJekyllTemplite:
         self.loop_vars = set()
 
         code = NanoJekyllCodeBuilder()
+        code.add_line('import html, json, datetime')
         code.add_line(inspect.getsource(NanoJekyllValue))
-        code.add_line("def render_function(filters = {}, ctx = {}):")
+        code.indent()
+        code.add_line("def render(self, filters = {}):")
         code.indent()
         vars_code = code.add_section()
+        code.add_line('globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})')
         code.add_line('globals().update(filters)')
-        code.add_line('globals().update({k : NanoJekyllValue(v) for k, v in ctx.items()})')
+        code.add_line('globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})')
         code.add_line('class TrimLeft(str): pass')
         code.add_line('class TrimRight(str): pass')
         code.add_line('nil, false, true = None, False, True')
@@ -165,10 +168,10 @@ class NanoJekyllTemplite:
         code.add_line("return finalize_result(result)")
         code.dedent()
         
-        print(str(code), file = sys.stderr)
+        #print(str(code), file = sys.stderr)
         print(str(code), file = open('render.py', 'w'))
 
-        self.render_function = code.get_globals()['render_function']
+        self.render_cls = code.get_globals()['NanoJekyllValue']
 
     def _expr_code(self, expr):
         expr = expr.strip()
@@ -183,13 +186,15 @@ class NanoJekyllTemplite:
                 func_name, *func_args = func.split(':', maxsplit = 1)
                 #self._variable(func_name, self.all_vars)
                 if not func_args:
-                    code = f"{func_name}({code})"
+                    #code = f"{func_name}({code})"
+                    code = f'{code} | {func_name}()'
                     #code = f"context['{func_name}']({code})"
                     #code = "c_%s(%s)" % (func_name, code)
                 else:
                     assert len(func_args) == 1
                     func_args = ', '.join(map(self._expr_code, func_args[0].split(',')))
-                    code = f"{func_name}({code}, {func_args})"
+                    #code = f"{func_name}({code}, {func_args})"
+                    code = f'{code} | {func_name}({func_args})'
                     #code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
                     
         elif "." in expr:
@@ -210,8 +215,10 @@ class NanoJekyllTemplite:
             self._syntax_error("Not a valid name", name)
         vars_set.add(name)
 
-    def render(self, context=None):
-        return self.render_function(self.filters, self.ctx | (context or {}))
+    def render(self, context = {}):
+        ctx = self.ctx | (context or {})
+        obj = self.render_cls(ctx)
+        return obj.render(self.filters)
 
 class NanoJekyllValue:
     def __init__(self, val = None):
@@ -376,7 +383,7 @@ class NanoJekyll:
         return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
 
     def render_layout(self, ctx = {}, layout = ''):
-        filters = self.filters | NanoJekyllValue.__dict__
+        filters = self.filters# | NanoJekyllValue.__dict__
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
