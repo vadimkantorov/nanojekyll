@@ -1,11 +1,7 @@
 # https://github.com/aosabook/500lines/tree/master/template-engine as a starting point
 
-import os
-import re
-import sys
+import os, sys, re, html, datetime
 import inspect
-import datetime
-import html
 
 class NanoJekyllCodeBuilder:
     INDENT_STEP = 4
@@ -14,7 +10,7 @@ class NanoJekyllCodeBuilder:
         self.indent_level = indent
     def __str__(self):
         return ''.join(str(c) for c in self.code)
-    def add_line(self, line):
+    def add_line(self, line = ''):
         self.code.extend([' ' * self.indent_level, line, "\n"])
     def add_section(self):
         section = NanoJekyllCodeBuilder(self.indent_level)
@@ -46,21 +42,11 @@ class NanoJekyllTemplite:
         self.loop_vars = set()
 
         code = NanoJekyllCodeBuilder()
-        code.add_line('import html, json, datetime')
+        code.add_line('import os, sys, re, html, datetime')
+        code.add_line()
         code.add_line(inspect.getsource(NanoJekyllValue))
         code.indent()
-        code.add_line("def render(self, filters = {}):")
         code.indent()
-        vars_code = code.add_section()
-        code.add_line('globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})')
-        code.add_line('globals().update(filters)')
-        code.add_line('globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})')
-        code.add_line('class TrimLeft(str): pass')
-        code.add_line('class TrimRight(str): pass')
-        code.add_line('nil, false, true = None, False, True')
-        code.add_line('class forloop: index = 1')
-        code.add_line('''def finalize_result(result): return "\\n".join(result)''')
-        code.add_line("result = []")
         code.add_line("")
         ops_stack = []
 
@@ -165,8 +151,10 @@ class NanoJekyllTemplite:
         for var_name in self.all_vars - self.loop_vars:
             vars_code.add_line("%s = context[%r]" % (var_name, var_name))
 
-        code.add_line("return finalize_result(result)")
+        code.add_line('return finalize_result(result)')
         code.dedent()
+        code.dedent()
+        assert code.indent_level == 0
         
         #print(str(code), file = sys.stderr)
         print(str(code), file = open('render.py', 'w'))
@@ -174,14 +162,13 @@ class NanoJekyllTemplite:
         self.render_cls = code.get_globals()['NanoJekyllValue']
 
     def _expr_code(self, expr):
+        is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"')) or (expr.startswith("'") and expr.endswith("'"))
         expr = expr.strip()
-        if expr.startswith('"') and expr.endswith('"'):
-            return expr
-        elif expr.startswith("'") and expr.endswith("'"):
+        if is_string_literal(expr):
             return expr
         elif "|" in expr:
             pipes = list(map(str.strip, expr.split("|")))
-            code = self._expr_code(pipes[0])
+            code = 'NanoJekyllValue(' + self._expr_code(pipes[0]) + ')'
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
                 #self._variable(func_name, self.all_vars)
@@ -222,7 +209,7 @@ class NanoJekyllTemplite:
 
 class NanoJekyllValue:
     def __init__(self, val = None):
-        self.val = val
+        self.val = val.val if isinstance(val, NanoJekyllValue) else val
     
     def __or__(self, other):
         return NanoJekyllValue(other[0](self.val, *other[1:]))
@@ -232,6 +219,31 @@ class NanoJekyllValue:
 
     def __bool__(self):
         return bool(self.val)
+
+    def __gt__(self, other):
+        other = other.val if isinstance(other, NanoJekyllValue) else other
+        return self.val > other
+
+    def __ge__(self, other):
+        other = other.val if isinstance(other, NanoJekyllValue) else other
+        return self.val >= other
+
+    def __lt__(self, other):
+        other = other.val if isinstance(other, NanoJekyllValue) else other
+        return self.val < other
+
+    def __le__(self, other):
+        other = other.val if isinstance(other, NanoJekyllValue) else other
+        return sefl.val <= other
+
+    def __eq__(self, other):
+        other = other.val if isinstance(other, NanoJekyllValue) else other
+        return self.val == other
+
+    def __ne__(self, other):
+        other = other.val if isinstance(other, NanoJekyllValue) else other
+        return self.val != other
+        
     
     def __getattr__(self, key):
         return NanoJekyllValue(getattr(self.val, key, None))
@@ -306,7 +318,7 @@ class NanoJekyllValue:
     @staticmethod
     def join(xs, sep):
         # https://shopify.github.io/liquid/filters/join/
-        return sep.join(map(str, xs))
+        return sep.join(str(x) for x in xs)
 
     @staticmethod
     def remove(x, y):
@@ -352,6 +364,19 @@ class NanoJekyllValue:
     def normalize_whitespace(x):
         return x
 
+    def render(self, filters = {}):
+        globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
+        globals().update(filters)
+        globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
+        nil, false, true = None, False, True
+        class TrimLeft(str): pass
+        class TrimRight(str): pass
+        class forloop:
+            index = 1
+            last = False
+        def finalize_result(result): return "\\n".join(result)
+        result = []
+
 class NanoJekyll:
     def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', filters = {}, plugins = {}):
         self.filters = {}
@@ -384,7 +409,7 @@ class NanoJekyll:
 
     def render_layout(self, ctx = {}, layout = ''):
         # https://jekyllrb.com/docs/rendering-process/
-        filters = self.filters# | NanoJekyllValue.__dict__
+        filters = self.filters
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
