@@ -3,6 +3,46 @@
 import os, sys, re, html, datetime
 import inspect
 
+class NanoJekyll:
+    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', filters = {}, plugins = {}):
+        self.filters = {}
+        self.plugins = {}
+        self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
+        self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
+
+    @staticmethod
+    def read_template(path, front_matter_sep = '---\n'):
+        front_matter = ''
+        template = ''
+        with open(path) as f:
+            line = f.readline()
+
+            if line == front_matter_sep:
+                front_matter += front_matter_sep
+                while (line := f.readline()) != front_matter_sep:
+                    front_matter += line
+                front_matter += front_matter_sep
+            else:
+                template += line
+
+            template += f.read()
+
+        return front_matter, template
+
+    @staticmethod
+    def extract_layout_from_frontmatter(frontmatter):
+        return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
+
+    def render_layout(self, ctx = {}, layout = ''):
+        # https://jekyllrb.com/docs/rendering-process/
+        filters = self.filters
+        content = ''
+        while layout:
+            frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
+            content = NanoJekyllTemplite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
+            layout = self.extract_layout_from_frontmatter(frontmatter)
+        return content
+
 class NanoJekyllCodeBuilder:
     INDENT_STEP = 4
     def __init__(self, indent=0):
@@ -22,7 +62,7 @@ class NanoJekyllCodeBuilder:
         self.indent_level -= self.INDENT_STEP
     def get_globals(self):
         # A check that the caller really finished all the blocks they started.
-        #assert self.indent_level == 0
+        assert self.indent_level == 0
         python_source = str(self)
         global_namespace = {}
         exec(python_source, global_namespace)
@@ -120,7 +160,11 @@ class NanoJekyllTemplite:
 
                 elif words[0] == 'include':
                     #code.add_line('#include ' + words[-1])
-                    frontmatter_include, template_include = self.context.get('includes', {})[words[1]]
+                    template_name = words[1]
+                    if len(words) > 2:
+                        code.add_line('include = NanoJekyllValue(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2]  for k in range(2, len(words), 3)) + '))')
+                        
+                    frontmatter_include, template_include = self.context.get('includes', {})[template_name]
                     tokens = tokens[:i + 1] + self.split_tokens(template_include) + tokens[i + 1:]
                 
                 elif words[0] == 'assign':
@@ -128,8 +172,6 @@ class NanoJekyllTemplite:
                     expr = self._expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
                     var_name = words[1]
                     code.add_line('{} = {}'.format(var_name, expr))
-                    #self._variable(var_name, self.all_vars)
-
 
                 elif words[0] == 'seo':
                     code.add_line('#seo#')
@@ -208,6 +250,7 @@ class NanoJekyllTemplite:
         return obj.render(self.filters)
 
 class NanoJekyllValue:
+    # https://shopify.github.io/liquid/basics/operators/
     def __init__(self, val = None):
         self.val = val.val if isinstance(val, NanoJekyllValue) else val
     
@@ -244,9 +287,18 @@ class NanoJekyllValue:
         other = other.val if isinstance(other, NanoJekyllValue) else other
         return self.val != other
         
-    
     def __getattr__(self, key):
+        if isinstance(self.val, dict):
+            if key in self.val:
+                return NanoJekyllValue(self.val[key])
         return NanoJekyllValue(getattr(self.val, key, None))
+    
+    def __getitem__(self, index):
+        if isinstance(self.val, (list, str)):
+            return NanoJekyllValue(self.val[index])
+        if isinstance(self.val, dict):
+            return NanoJekyllValue(self.val.get(index))
+        return NanoJekyllValue(None)
 
     def __len__(self):
         return len(self.val) if isinstance(self.val, (list, dict, str)) else None
@@ -283,7 +335,7 @@ class NanoJekyllValue:
     @staticmethod
     def escape(s):
         # https://shopify.github.io/liquid/filters/escape/
-        return html.escape(str(s))
+        return html.escape(str(s)) if s else ''
     
     @staticmethod
     def default(s, t):
@@ -303,12 +355,12 @@ class NanoJekyllValue:
     @staticmethod
     def append(xs, item):
         # https://shopify.github.io/liquid/filters/append/
-        return xs.append(item) or xs
+        return str(xs or '') + str(item or '')
 
     @staticmethod
     def first(xs):
         # https://shopify.github.io/liquid/filters/first/
-        return xs[0]
+        return xs[0] if xs else None
 
     @staticmethod
     def size(xs):
@@ -365,54 +417,14 @@ class NanoJekyllValue:
         return x
 
     def render(self, filters = {}):
+        # https://shopify.github.io/liquid/tags/iteration/#forloop-object
         globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
         globals().update(filters)
         globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
         nil, false, true = None, False, True
         class TrimLeft(str): pass
         class TrimRight(str): pass
-        class forloop:
-            index = 1
-            last = False
-        def finalize_result(result): return "\\n".join(result)
+        class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;
+        def finalize_result(result): return "".join(result)
         result = []
 
-class NanoJekyll:
-    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', filters = {}, plugins = {}):
-        self.filters = {}
-        self.plugins = {}
-        self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
-        self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
-
-    @staticmethod
-    def read_template(path, front_matter_sep = '---\n'):
-        front_matter = ''
-        template = ''
-        with open(path) as f:
-            line = f.readline()
-
-            if line == front_matter_sep:
-                front_matter += front_matter_sep
-                while (line := f.readline()) != front_matter_sep:
-                    front_matter += line
-                front_matter += front_matter_sep
-            else:
-                template += line
-
-            template += f.read()
-
-        return front_matter, template
-
-    @staticmethod
-    def extract_layout_from_frontmatter(frontmatter):
-        return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
-
-    def render_layout(self, ctx = {}, layout = ''):
-        # https://jekyllrb.com/docs/rendering-process/
-        filters = self.filters
-        content = ''
-        while layout:
-            frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = NanoJekyllTemplite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
-            layout = self.extract_layout_from_frontmatter(frontmatter)
-        return content
