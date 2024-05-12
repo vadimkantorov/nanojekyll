@@ -86,6 +86,8 @@ class NanoJekyllTemplate:
         self.indent()
         self.add_line()
 
+        if self.global_variables:
+            self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.val.get("{k}"))' for k in self.global_variables))
 
         tokens = split_tokens(template_code)
         
@@ -136,23 +138,18 @@ class NanoJekyllTemplate:
                 
                 elif words[0] == 'for':
                     # A loop: iterate over expression result.
-                    if len(words) != 4 or words[2] != 'in':
-                        raise ValueError(f"Don't understand for: {token=}")
+                    assert len(words) == 4 and words[2] == 'in', f"Don't understand for: {token=}"
                     ops_stack.append('for')
                     self.add_line("for {} in {}:".format(words[1], self._expr_code(words[3]) ) )
                     self.indent()
                 
                 elif words[0].startswith('end'):
                     # Endsomething.  Pop the ops stack.
-                    if len(words) != 1:
-                        raise ValueError(f"Don't understand end: {token=}")
+                    assert len(words) == 1, f"Don't understand end: {token=}"
                     end_what = words[0][3:]
-                    if not ops_stack:
-                        raise ValueError(f"Too many ends: {token=}")
+                    assert ops_stack, f"Too many ends: {token=}"
                     start_what = ops_stack.pop()
-                    if start_what != end_what:
-                        print('start:', start_what, 'end:', end_what)
-                        raise ValueError(f"Mismatched end tag: {end_what=}")
+                    assert start_what == end_what, f"Mismatched end tag: {start_what=} != {end_what=}"
                     self.dedent()
 
                 elif words[0] == 'include':
@@ -174,7 +171,7 @@ class NanoJekyllTemplate:
                     self.add_line('#seo#')
         
                 else:
-                    raise ValueError("Don't understand tag: " + words[0])
+                    assert False, ("Don't understand tag: " + words[0])
 
             else:
                 if token:
@@ -184,8 +181,7 @@ class NanoJekyllTemplate:
                 self.add_line("result.append(TrimRight())")
             i += 1
 
-        if ops_stack:
-            raise ValueError("Unmatched action tag: " + ops_stack[-1])
+        assert not ops_stack, ("Unmatched action tag: " + ops_stack[-1])
 
         self.add_line('return finalize_result(result)')
         self.dedent()
@@ -207,33 +203,18 @@ class NanoJekyllTemplate:
             code = 'NanoJekyllValue(' + self._expr_code(pipes[0]) + ')'
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
-                #self._variable(func_name, self.all_vars)
                 if not func_args:
-                    #code = f"{func_name}({code})"
                     code = f'{code} | {func_name}()'
-                    #code = f"context['{func_name}']({code})"
-                    #code = "c_%s(%s)" % (func_name, code)
                 else:
                     assert len(func_args) == 1
                     func_args = ', '.join(map(self._expr_code, func_args[0].split(',')))
-                    #code = f"{func_name}({code}, {func_args})"
                     code = f'{code} | {func_name}({func_args})'
-                    #code = "c_%s(%s, %s)" % (func_name, code, self._expr_code(func_args[0]))
                     
         elif "." in expr:
-            #self._variable(expr.split(".")[0], self.all_vars)
             code = expr
-            #args = ", ".join(repr(d) for d in dots[1:])
-            #code = "do_dots(%s, %s)" % (code, args)
         else:
-            #self._variable(expr, self.all_vars)
             code = "%s" % expr
         return code
-
-    def _variable(self, name, vars_set):
-        if not re.match(r"[_a-zA-Z][_a-zA-Z0-9]*$", name):
-            raise ValueError(f"Not a valid name: {name=}")
-        vars_set.add(name)
 
 class NanoJekyllValue:
     # https://shopify.github.io/liquid/basics/operators/
