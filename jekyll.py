@@ -70,7 +70,7 @@ class NanoJekyllTemplite:
         obj = self.render_cls(self.ctx | (ctx or {}))
         return obj.render()
     
-    def __init__(self, text, filters = {}, ctx = {}):
+    def __init__(self, text, ctx = {}):
         self.ctx = ctx
     
         split_tokens = lambda text: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
@@ -83,11 +83,12 @@ class NanoJekyllTemplite:
         code.indent()
         code.indent()
         code.add_line()
-        ops_stack = []
+
 
         tokens = split_tokens(text)
         
-        i = 0;
+        ops_stack = []
+        i = 0
         while i < len(tokens):
             token = tokens[i]
             b = 3 if token.startswith('{%-') or token.startswith('{{-') else 2
@@ -412,4 +413,4 @@ class NanoJekyllValue:
         result = []
         globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
         globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
-
+        
