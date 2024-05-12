@@ -12,11 +12,9 @@ class NanoJekyll:
 
     @staticmethod
     def read_template(path, front_matter_sep = '---\n'):
-        front_matter = ''
-        template = ''
+        front_matter, template = '', ''
         with open(path) as f:
             line = f.readline()
-
             if line == front_matter_sep:
                 front_matter += front_matter_sep
                 while (line := f.readline()) != front_matter_sep:
@@ -24,18 +22,15 @@ class NanoJekyll:
                 front_matter += front_matter_sep
             else:
                 template += line
-
             template += f.read()
-
         return front_matter, template
 
     @staticmethod
     def extract_layout_from_frontmatter(frontmatter):
         return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
 
-    def render(self, ctx = {}, layout = ''):
+    def render(self, ctx = {}, layout = '', content = ''):
         # https://jekyllrb.com/docs/rendering-process/
-        content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
             content = NanoJekyllTemplate(template, includes = self.includes, global_variables = self.global_variables).render(ctx = ctx | dict(content = content))
@@ -86,7 +81,7 @@ class NanoJekyllTemplate:
         self.add_line()
 
         if self.global_variables:
-            self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.ctx.get("{k}"))' for k in self.global_variables))
+            self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.ctx.get({k!r}))' for k in self.global_variables))
 
         tokens = split_tokens(template_code)
         
@@ -205,11 +200,11 @@ class NanoJekyllTemplate:
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
                 if not func_args:
-                    code = f'{code} | {func_name}()'
+                    code = f'{code} | _{func_name}()'
                 else:
                     assert len(func_args) == 1
                     func_args = ', '.join(map(self._expr_code, func_args[0].split(',')))
-                    code = f'{code} | {func_name}({func_args})'
+                    code = f'{code} | _{func_name}({func_args})'
                     
         elif "." in expr:
             code = expr
@@ -282,107 +277,111 @@ class NanoJekyllValue:
     # https://jekyllrb.com/docs/liquid/filters/
 
     @staticmethod
-    def relative_url(url):
+    def _relative_url(url):
         # https://jekyllrb.com/docs/liquid/filters/
-        return url
+        return ('.' + url) if url.startswith('/') else url
 
     @staticmethod
-    def absolute_url(url):
+    def _absolute_url(url):
         # https://jekyllrb.com/docs/liquid/filters/
         return url
     
     @staticmethod
-    def date_to_xmlschema(dt):
+    def _date_to_xmlschema(dt):
         pass
     
     @staticmethod
-    def date(dt, date_format):
+    def _date(dt, date_format):
         # https://shopify.github.io/liquid/filters/date/
-        return dt.strftime(date_format)
+        return dt #.strftime(date_format)
 
     @staticmethod
-    def escape(s):
+    def _escape(s):
         # https://shopify.github.io/liquid/filters/escape/
         return html.escape(str(s)) if s else ''
     
     @staticmethod
-    def default(s, t):
+    def _default(s, t):
         # https://shopify.github.io/liquid/filters/default/
         return s or t
 
     @staticmethod
-    def where(xs, key, value):
+    def _where(xs, key, value):
         # https://shopify.github.io/liquid/filters/where/
         return [x for x in xs if x[key] == value]
 
     @staticmethod
-    def map(xs, key):
+    def _map(xs, key):
         # https://shopify.github.io/liquid/filters/map/
         return [x[key] for x in xs] if xs else []
     
     @staticmethod
-    def append(xs, item):
+    def _append(xs, item):
         # https://shopify.github.io/liquid/filters/append/
         return str(xs or '') + str(item or '')
 
     @staticmethod
-    def first(xs):
+    def _first(xs):
         # https://shopify.github.io/liquid/filters/first/
         return xs[0] if xs else None
 
     @staticmethod
-    def size(xs):
+    def _size(xs):
         # https://shopify.github.io/liquid/filters/size/
         return len(xs)
 
     @staticmethod
-    def join(xs, sep):
+    def _join(xs, sep):
         # https://shopify.github.io/liquid/filters/join/
         return sep.join(str(x) for x in xs)
 
     @staticmethod
-    def remove(x, y):
+    def _remove(x, y):
         return x.replace(y, '')
 
     @staticmethod
-    def jsonify(x):
+    def _jsonify(x):
         return json.dumps(x, ensure_ascii = False)
 
     @staticmethod
-    def xml_escape(x):
+    def _xml_escape(x):
         return x
 
     @staticmethod
-    def capitalize(x):
+    def _capitalize(x):
         return x
 
     @staticmethod
-    def smartify(x):
+    def _smartify(x):
         return x
 
     @staticmethod
-    def where_exp(x, y):
+    def _where_exp(x, y):
         return x
 
     @staticmethod
-    def sort(x):
+    def _sort(x):
         return sorted(x)
     
     @staticmethod
-    def reverse(x):
+    def _reverse(x):
         return list(reversed(x))
 
     @staticmethod
-    def strip(x):
+    def _strip(x):
         return x
 
     @staticmethod
-    def strip_html(x):
+    def _strip_html(x):
         return x
 
     @staticmethod
-    def normalize_whitespace(x):
+    def _normalize_whitespace(x):
         return x
+
+    @property
+    def size(self):
+        return NanoJekyllValue(len(self) if self else 0)
 
     def render(self):
         # https://shopify.github.io/liquid/tags/iteration/#forloop-object
