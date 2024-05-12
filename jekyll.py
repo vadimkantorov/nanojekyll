@@ -96,30 +96,32 @@ class NanoJekyllTemplate:
             token = tokens[i]
             b = 3 if token.startswith('{%-') or token.startswith('{{-') else 2
             e = -3 if token.endswith('-%}') or token.endswith('-}}') else -2
+            token_inner = token[b:e].strip()
+            words = token_inner.split()
             
             if b == 3:
                 self.add_line("result.append(TrimLeft())")
 
-            if token.startswith('{#'):
-                i += 1
-                continue
-
-            elif token.startswith('{{'):
-                token_inner = token[b:e].strip()
+            if token.startswith('{{'):
                 expr = self._expr_code(token_inner)
                 self.add_line(f"result.append(str({expr}))")
 
             elif token.startswith('{%'):
                 # Action tag: split into words and parse further.
                 #flush_output()
-                token_inner = token[b:e].strip()
-                words = token_inner.split()
+                #token_inner = token[b:e].strip()
+                #words = token_inner.split()
                 if words[0] == '-':
                     del words[0]
                 if words[-1] == '-':
                     del words[-1]
 
-                if words[0] == 'if':
+                if words[0] == 'comment':
+                    tokens_i_end = tokens[i].replace(' ', '').replace('comment', 'endcomment')
+                    while tokens[i].replace(' ', '') != tokens_i_end:
+                        i += 1
+
+                elif words[0] == 'if':
                     ops_stack.append('if')
                     self.add_line("if {}:".format(' '.join(words[1:])))
                     self.indent()
