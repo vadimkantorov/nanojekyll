@@ -36,7 +36,7 @@ class NanoJekyll:
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = NanoJekyllTemplite(template, ctx = dict(includes = self.includes)).render(ctx = ctx | dict(content = content))
+            content = NanoJekyllTemplate(template, ctx = dict(includes = self.includes)).render(ctx = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
 
@@ -49,10 +49,6 @@ class NanoJekyllCodeBuilder:
         return ''.join(str(c) for c in self.code)
     def add_line(self, line = ''):
         self.code.extend([' ' * self.indent_level, line, "\n"])
-    def add_section(self):
-        section = NanoJekyllCodeBuilder(self.indent_level)
-        self.code.append(section)
-        return section
     def indent(self):
         self.indent_level += self.INDENT_STEP
     def dedent(self):
@@ -65,15 +61,15 @@ class NanoJekyllCodeBuilder:
         exec(python_source, global_namespace)
         return global_namespace
 
-class NanoJekyllTemplite:
+class NanoJekyllTemplate:
     def render(self, ctx = {}):
         obj = self.render_cls(self.ctx | (ctx or {}))
         return obj.render()
     
-    def __init__(self, text, ctx = {}):
+    def __init__(self, template_code, ctx = {}):
         self.ctx = ctx
     
-        split_tokens = lambda text: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
+        split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
 
 
         code = NanoJekyllCodeBuilder()
@@ -85,7 +81,7 @@ class NanoJekyllTemplite:
         code.add_line()
 
 
-        tokens = split_tokens(text)
+        tokens = split_tokens(template_code)
         
         ops_stack = []
         i = 0
