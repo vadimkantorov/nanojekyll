@@ -31,12 +31,12 @@ class NanoJekyll:
     def extract_layout_from_frontmatter(frontmatter):
         return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
 
-    def render_layout(self, ctx = {}, layout = ''):
+    def render(self, ctx = {}, layout = ''):
         # https://jekyllrb.com/docs/rendering-process/
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = NanoJekyllTemplite(template, ctx = dict(includes = self.includes)).render(context = ctx | dict(content = content))
+            content = NanoJekyllTemplite(template, ctx = dict(includes = self.includes)).render(ctx = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
 
@@ -66,6 +66,10 @@ class NanoJekyllCodeBuilder:
         return global_namespace
 
 class NanoJekyllTemplite:
+    def render(self, ctx = {}):
+        obj = self.render_cls(self.ctx | (ctx or {}))
+        return obj.render()
+    
     def __init__(self, text, filters = {}, ctx = {}):
         self.filters = filters
         self.ctx = ctx
@@ -232,11 +236,6 @@ class NanoJekyllTemplite:
         if not re.match(r"[_a-zA-Z][_a-zA-Z0-9]*$", name):
             self._syntax_error("Not a valid name", name)
         vars_set.add(name)
-
-    def render(self, context = {}):
-        ctx = self.ctx | (context or {})
-        obj = self.render_cls(ctx)
-        return obj.render()
 
 class NanoJekyllValue:
     # https://shopify.github.io/liquid/basics/operators/
