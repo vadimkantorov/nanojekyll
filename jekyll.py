@@ -4,9 +4,7 @@ import os, sys, re, html, datetime
 import inspect
 
 class NanoJekyll:
-    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', filters = {}, plugins = {}):
-        self.filters = {}
-        self.plugins = {}
+    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts'):
         self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
         self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
 
@@ -35,11 +33,10 @@ class NanoJekyll:
 
     def render_layout(self, ctx = {}, layout = ''):
         # https://jekyllrb.com/docs/rendering-process/
-        filters = self.filters
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = NanoJekyllTemplite(template, filters, dict(includes = self.includes)).render(context = ctx | dict(content = content))
+            content = NanoJekyllTemplite(template, ctx = dict(includes = self.includes)).render(context = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
 
@@ -69,17 +66,13 @@ class NanoJekyllCodeBuilder:
         return global_namespace
 
 class NanoJekyllTemplite:
-    @staticmethod
-    def split_tokens(text):
-        return re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
-
     def __init__(self, text, filters = {}, ctx = {}):
         self.filters = filters
         self.ctx = ctx
         self.context = self.filters | self.ctx
+    
+        split_tokens = lambda text: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
 
-        self.all_vars = set()
-        self.loop_vars = set()
 
         code = NanoJekyllCodeBuilder()
         code.add_line('import os, sys, re, html, datetime')
@@ -87,10 +80,10 @@ class NanoJekyllTemplite:
         code.add_line(inspect.getsource(NanoJekyllValue))
         code.indent()
         code.indent()
-        code.add_line("")
+        code.add_line()
         ops_stack = []
 
-        tokens = self.split_tokens(text)
+        tokens = split_tokens(text)
         
         i = 0;
         while i < len(tokens):
@@ -141,7 +134,6 @@ class NanoJekyllTemplite:
                     if len(words) != 4 or words[2] != 'in':
                         self._syntax_error("Don't understand for", token)
                     ops_stack.append('for')
-                    #self._variable(words[1], self.loop_vars)
                     code.add_line("for {} in {}:".format(words[1], self._expr_code(words[3]) ) )
                     code.indent()
                 
@@ -165,7 +157,7 @@ class NanoJekyllTemplite:
                         code.add_line('include = NanoJekyllValue(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2]  for k in range(2, len(words), 3)) + '))')
                         
                     frontmatter_include, template_include = self.context.get('includes', {})[template_name]
-                    tokens = tokens[:i + 1] + self.split_tokens(template_include) + tokens[i + 1:]
+                    tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
                 
                 elif words[0] == 'assign':
                     assert words[2] == '='
@@ -190,9 +182,6 @@ class NanoJekyllTemplite:
         if ops_stack:
             self._syntax_error("Unmatched action tag", ops_stack[-1])
 
-        for var_name in self.all_vars - self.loop_vars:
-            vars_code.add_line("%s = context[%r]" % (var_name, var_name))
-
         code.add_line('return finalize_result(result)')
         code.dedent()
         code.dedent()
@@ -202,7 +191,7 @@ class NanoJekyllTemplite:
         print(str(code), file = open('render.py', 'w'))
 
         self.render_cls = code.get_globals()['NanoJekyllValue']
-
+    
     def _expr_code(self, expr):
         is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"')) or (expr.startswith("'") and expr.endswith("'"))
         expr = expr.strip()
@@ -247,7 +236,7 @@ class NanoJekyllTemplite:
     def render(self, context = {}):
         ctx = self.ctx | (context or {})
         obj = self.render_cls(ctx)
-        return obj.render(self.filters)
+        return obj.render()
 
 class NanoJekyllValue:
     # https://shopify.github.io/liquid/basics/operators/
@@ -416,10 +405,9 @@ class NanoJekyllValue:
     def normalize_whitespace(x):
         return x
 
-    def render(self, filters = {}):
+    def render(self):
         # https://shopify.github.io/liquid/tags/iteration/#forloop-object
         globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
-        globals().update(filters)
         globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
         nil, false, true = None, False, True
         class TrimLeft(str): pass
