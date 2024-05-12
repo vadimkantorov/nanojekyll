@@ -71,9 +71,7 @@ class NanoJekyllTemplite:
         return obj.render()
     
     def __init__(self, text, filters = {}, ctx = {}):
-        self.filters = filters
         self.ctx = ctx
-        self.context = self.filters | self.ctx
     
         split_tokens = lambda text: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", text)
 
@@ -160,7 +158,7 @@ class NanoJekyllTemplite:
                     if len(words) > 2:
                         code.add_line('include = NanoJekyllValue(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2]  for k in range(2, len(words), 3)) + '))')
                         
-                    frontmatter_include, template_include = self.context.get('includes', {})[template_name]
+                    frontmatter_include, template_include = self.ctx.get('includes', {})[template_name]
                     tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
                 
                 elif words[0] == 'assign':
@@ -406,12 +404,12 @@ class NanoJekyllValue:
 
     def render(self):
         # https://shopify.github.io/liquid/tags/iteration/#forloop-object
-        globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
-        globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
         nil, false, true = None, False, True
         class TrimLeft(str): pass
         class TrimRight(str): pass
         class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;
         def finalize_result(result): return "".join(result)
         result = []
+        globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
+        globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
 
