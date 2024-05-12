@@ -38,7 +38,7 @@ class NanoJekyll:
         content = ''
         while layout:
             frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = NanoJekyllTemplate(template, ctx = dict(includes = self.includes), global_variables = self.global_variables).render(ctx = ctx | dict(content = content))
+            content = NanoJekyllTemplate(template, includes = self.includes, global_variables = self.global_variables).render(ctx = ctx | dict(content = content))
             layout = self.extract_layout_from_frontmatter(frontmatter)
         return content
 
@@ -46,8 +46,7 @@ class NanoJekyllTemplate:
     INDENT_STEP = 4
 
     def render(self, ctx = {}):
-        obj = self.render_cls(self.ctx | (ctx or {}))
-        return obj.render()
+        return self.render_cls(ctx).render()
     
     def add_line(self, line = ''):
         self.code.extend([' ' * self.indent_level, line, "\n"])
@@ -69,8 +68,8 @@ class NanoJekyllTemplate:
         exec(python_source, global_namespace)
         return global_namespace
     
-    def __init__(self, template_code, ctx = {}, global_variables = []):
-        self.ctx = ctx
+    def __init__(self, template_code, includes = {}, global_variables = []):
+        self.includes = includes
         self.global_variables = global_variables
 
         self.code = []
@@ -87,7 +86,7 @@ class NanoJekyllTemplate:
         self.add_line()
 
         if self.global_variables:
-            self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.val.get("{k}"))' for k in self.global_variables))
+            self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.ctx.get("{k}"))' for k in self.global_variables))
 
         tokens = split_tokens(template_code)
         
@@ -158,7 +157,7 @@ class NanoJekyllTemplate:
                     if len(words) > 2:
                         self.add_line('include = NanoJekyllValue(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2]  for k in range(2, len(words), 3)) + '))')
                         
-                    frontmatter_include, template_include = self.ctx.get('includes', {})[template_name]
+                    frontmatter_include, template_include = self.includes[template_name]
                     tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
                 
                 elif words[0] == 'assign':
@@ -218,60 +217,60 @@ class NanoJekyllTemplate:
 
 class NanoJekyllValue:
     # https://shopify.github.io/liquid/basics/operators/
-    def __init__(self, val = None):
-        self.val = val.val if isinstance(val, NanoJekyllValue) else val
+    def __init__(self, ctx = None):
+        self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllValue) else ctx
     
     def __or__(self, other):
-        return NanoJekyllValue(other[0](self.val, *other[1:]))
+        return NanoJekyllValue(other[0](self.ctx, *other[1:]))
 
     def __str__(self):
-        return str(self.val) if self.val else ''
+        return str(self.ctx) if self.ctx else ''
 
     def __bool__(self):
-        return bool(self.val)
+        return bool(self.ctx)
 
     def __gt__(self, other):
-        other = other.val if isinstance(other, NanoJekyllValue) else other
-        return self.val > other
+        other = other.ctx if isinstance(other, NanoJekyllValue) else other
+        return self.ctx > other
 
     def __ge__(self, other):
-        other = other.val if isinstance(other, NanoJekyllValue) else other
-        return self.val >= other
+        other = other.ctx if isinstance(other, NanoJekyllValue) else other
+        return self.ctx >= other
 
     def __lt__(self, other):
-        other = other.val if isinstance(other, NanoJekyllValue) else other
-        return self.val < other
+        other = other.ctx if isinstance(other, NanoJekyllValue) else other
+        return self.ctx < other
 
     def __le__(self, other):
-        other = other.val if isinstance(other, NanoJekyllValue) else other
-        return sefl.val <= other
+        other = other.ctx if isinstance(other, NanoJekyllValue) else other
+        return self.ctx <= other
 
     def __eq__(self, other):
-        other = other.val if isinstance(other, NanoJekyllValue) else other
-        return self.val == other
+        other = other.ctx if isinstance(other, NanoJekyllValue) else other
+        return self.ctx == other
 
     def __ne__(self, other):
-        other = other.val if isinstance(other, NanoJekyllValue) else other
-        return self.val != other
+        other = other.ctx if isinstance(other, NanoJekyllValue) else other
+        return self.ctx != other
         
     def __getattr__(self, key):
-        if isinstance(self.val, dict):
-            if key in self.val:
-                return NanoJekyllValue(self.val[key])
-        return NanoJekyllValue(getattr(self.val, key, None))
+        if isinstance(self.ctx, dict):
+            if key in self.ctx:
+                return NanoJekyllValue(self.ctx[key])
+        return NanoJekyllValue(getattr(self.ctx, key, None))
     
     def __getitem__(self, index):
-        if isinstance(self.val, (list, str)):
-            return NanoJekyllValue(self.val[index])
-        if isinstance(self.val, dict):
-            return NanoJekyllValue(self.val.get(index))
+        if isinstance(self.ctx, (list, str)):
+            return NanoJekyllValue(self.ctx[index])
+        if isinstance(self.ctx, dict):
+            return NanoJekyllValue(self.ctx.get(index))
         return NanoJekyllValue(None)
 
     def __len__(self):
-        return len(self.val) if isinstance(self.val, (list, dict, str)) else None
+        return len(self.ctx) if isinstance(self.ctx, (list, dict, str)) else None
 
     def __iter__(self):
-        yield from (self.val if self.val else [])
+        yield from (self.ctx if self.ctx else [])
 
     @staticmethod
     def pipify(f):
@@ -391,6 +390,6 @@ class NanoJekyllValue:
         class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;
         def finalize_result(result): return "".join(result)
         result = []
-        globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "val" and not k.startswith("__")})
-        globals().update({k : NanoJekyllValue(v) for k, v in self.val.items()})
+        globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "ctx" and not k.startswith("__")})
+        globals().update({k : NanoJekyllValue(v) for k, v in self.ctx.items()})
         
