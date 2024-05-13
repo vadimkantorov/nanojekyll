@@ -3,67 +3,34 @@
 import os, sys, re, html, datetime
 import inspect
 
-class NanoJekyll:
-    def __init__(self, base_dir = '.', includes_dirname = '_includes', layouts_dirname = '_layouts', global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator']):
-        # https://jekyllrb.com/docs/variables/
-        self.global_variables = global_variables
-        self.layouts = {basename : self.read_template(os.path.join(base_dir, layouts_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, layouts_dirname)) if os.path.isfile(os.path.join(base_dir, layouts_dirname, basename))}
-        self.includes = {basename : self.read_template(os.path.join(base_dir, includes_dirname, basename)) for basename in os.listdir(os.path.join(base_dir, includes_dirname)) if os.path.isfile(os.path.join(base_dir, includes_dirname, basename))}
-
-    @staticmethod
-    def read_template(path, front_matter_sep = '---\n'):
-        front_matter, template = '', ''
-        with open(path) as f:
-            line = f.readline()
-            if line == front_matter_sep:
-                front_matter += front_matter_sep
-                while (line := f.readline()) != front_matter_sep:
-                    front_matter += line
-                front_matter += front_matter_sep
-            else:
-                template += line
-            template += f.read()
-        return front_matter, template
-
-    @staticmethod
-    def extract_layout_from_frontmatter(frontmatter):
-        return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
-
-    def render(self, ctx = {}, layout = '', content = ''):
-        # https://jekyllrb.com/docs/rendering-process/
-        while layout:
-            frontmatter, template = [l for k, l in self.layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-            content = NanoJekyllTemplate(template, includes = self.includes, global_variables = self.global_variables).render(ctx = ctx | dict(content = content))
-            layout = self.extract_layout_from_frontmatter(frontmatter)
-        return content
-
 class NanoJekyllTemplate:
-    INDENT_STEP = 4
-
-    def render(self, ctx = {}):
-        return self.render_cls(ctx).render()
-    
     def add_line(self, line = ''):
         self.code.extend([' ' * self.indent_level, line, "\n"])
     
-    def indent(self):
-        self.indent_level += self.INDENT_STEP
+    def indent(self, INDENT_STEP = 4):
+        self.indent_level += INDENT_STEP
     
-    def dedent(self):
-        self.indent_level -= self.INDENT_STEP
+    def dedent(self, INDENT_STEP = 4):
+        self.indent_level -= INDENT_STEP
     
-    def __str__(self):
-        return ''.join(str(c) for c in self.code)
-    
-    def get_globals(self):
-        # A check that the caller really finished all the blocks they started.
-        assert self.indent_level == 0
-        python_source = str(self)
+    @staticmethod
+    def makecls(templates, includes = {}, global_variables = [], return_source = False):
+        templates = [NanoJekyllTemplate(template_code, layout_name = layout_name, includes = includes, global_variables = global_variables) for layout_name, template_code in templates.items()]
+        
+        python_source = 'import os, sys, re, html, datetime\n\n'
+        python_source += inspect.getsource(NanoJekyllValue)
+        python_source += '\n'.join(''.join(str(c) for c in self.code) for self in templates)
+        
+        open('render.py', 'w').write(python_source)
+        if return_source:
+            return python_source
+        
         global_namespace = {}
         exec(python_source, global_namespace)
-        return global_namespace
-    
-    def __init__(self, template_code, includes = {}, global_variables = []):
+        cls = global_namespace['NanoJekyllValue'] 
+        return cls
+   
+    def __init__(self, template_code, layout_name = '', includes = {}, global_variables = []):
         self.includes = includes
         self.global_variables = global_variables
 
@@ -71,14 +38,15 @@ class NanoJekyllTemplate:
         self.indent_level = 0
     
         split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
+        # https://shopify.github.io/liquid/tags/iteration/#forloop-object
 
-
-        self.add_line('import os, sys, re, html, datetime')
-        self.add_line()
-        self.add_line(inspect.getsource(NanoJekyllValue))
+        function_name = NanoJekyllValue.prepare_layout_name(layout_name)
         self.indent()
+        self.add_line(f'def render_{function_name}(self):')
         self.indent()
-        self.add_line()
+        self.add_line('''nil, false, true, newline, result = None, False, True, "\\n", []''')
+        self.add_line("class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;")
+        self.add_line("globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != 'ctx' and not k.startswith('__')})")
 
         if self.global_variables:
             self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.ctx.get({k!r}))' for k in self.global_variables))
@@ -95,17 +63,13 @@ class NanoJekyllTemplate:
             words = token_inner.split()
             
             if b == 3:
-                self.add_line("result.append(TrimLeft())")
+                self.add_line("result.append(self.TrimLeft())")
 
             if token.startswith('{{'):
                 expr = self._expr_code(token_inner)
                 self.add_line(f"result.append(str({expr}))")
 
             elif token.startswith('{%'):
-                # Action tag: split into words and parse further.
-                #flush_output()
-                #token_inner = token[b:e].strip()
-                #words = token_inner.split()
                 if words[0] == '-':
                     del words[0]
                 if words[-1] == '-':
@@ -115,6 +79,16 @@ class NanoJekyllTemplate:
                     tokens_i_end = tokens[i].replace(' ', '').replace('comment', 'endcomment')
                     while tokens[i].replace(' ', '') != tokens_i_end:
                         i += 1
+    
+                elif words[0] == 'highlight':
+                    lang = ''.join(words[1:])
+                    self.add_line(f'result.append(newline + "```{lang}" + newline)')
+                    tokens_i_end = '{%endhighlight%}'
+                    i += 1
+                    while tokens[i].replace(' ', '') != tokens_i_end:
+                        self.add_line('result.append(' + repr(tokens[i]) + ')')
+                        i += 1
+                    self.add_line('result.append(newline + "```" + newline)')
 
                 elif words[0] == 'if':
                     ops_stack.append('if')
@@ -149,13 +123,22 @@ class NanoJekyllTemplate:
                     self.dedent()
 
                 elif words[0] == 'include':
-                    #self.add_line('#include ' + words[-1])
                     template_name = words[1]
-                    if len(words) > 2:
-                        self.add_line('include = NanoJekyllValue(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2]  for k in range(2, len(words), 3)) + '))')
-                        
-                    frontmatter_include, template_include = self.includes[template_name]
-                    tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
+                    beg = None
+                    if len(words) > 2 and '=' in words:
+                        beg = ([k for k, w in enumerate(words) if w == '='] or [0])[0] - 1
+                        self.add_line('include = NanoJekyllValue(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2] for k in range(beg, len(words), 3)) + '))')
+                    template_name = ' '.join(words[1:beg])
+
+                    if '{{' not in template_name and '}}' not in template_name:
+                        frontmatter_include, template_include = self.includes[template_name]
+                        tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
+                    else:
+                        template_name = ' '.join(words[1:]).replace('{{', '{').replace('}}', '}')
+                        template_name = 'f' + repr(template_name)
+                        self.add_line('includes = ' + repr(self.includes))
+                        self.add_line('include_name = ' + template_name)
+                        self.add_line('result.append(includes[include_name][-1])')
                 
                 elif words[0] == 'assign':
                     assert words[2] == '='
@@ -163,8 +146,8 @@ class NanoJekyllTemplate:
                     var_name = words[1]
                     self.add_line('{} = {}'.format(var_name, expr))
 
-                elif words[0] == 'seo':
-                    self.add_line('#seo#')
+                elif words[0] == 'seo' or words[0] == 'feed_meta':
+                    pass
         
                 else:
                     assert False, ("Don't understand tag: " + words[0])
@@ -174,20 +157,15 @@ class NanoJekyllTemplate:
                     self.add_line("result.append({})".format(repr(token)))
             
             if e == -3:
-                self.add_line("result.append(TrimRight())")
+                self.add_line("result.append(self.TrimRight())")
             i += 1
 
         assert not ops_stack, ("Unmatched action tag: " + ops_stack[-1])
 
-        self.add_line('return finalize_result(result)')
+        self.add_line('return self.finalize_result(result)')
         self.dedent()
         self.dedent()
         assert self.indent_level == 0
-        
-        #print(str(code), file = sys.stderr)
-        print(str(self), file = open('render.py', 'w'))
-
-        self.render_cls = self.get_globals()['NanoJekyllValue']
     
     def _expr_code(self, expr):
         is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"')) or (expr.startswith("'") and expr.endswith("'"))
@@ -267,7 +245,7 @@ class NanoJekyllValue:
         return len(self.ctx) if isinstance(self.ctx, (list, dict, str)) else None
 
     def __iter__(self):
-        yield from (self.ctx if self.ctx else [])
+        yield from (map(NanoJekyllValue, self.ctx) if self.ctx else [])
 
     @staticmethod
     def pipify(f):
@@ -382,15 +360,18 @@ class NanoJekyllValue:
     @property
     def size(self):
         return NanoJekyllValue(len(self) if self else 0)
-
-    def render(self):
-        # https://shopify.github.io/liquid/tags/iteration/#forloop-object
-        nil, false, true = None, False, True
-        class TrimLeft(str): pass
-        class TrimRight(str): pass
-        class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;
-        def finalize_result(result): return "".join(result)
-        result = []
-        globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != "ctx" and not k.startswith("__")})
-        globals().update({k : NanoJekyllValue(v) for k, v in self.ctx.items()})
         
+    class TrimLeft(str): pass
+    class TrimRight(str): pass
+    @staticmethod
+    def finalize_result(result):
+        return ''.join(result)
+    
+    @staticmethod
+    def prepare_layout_name(layout_name):
+        return os.path.splitext(layout_name)[0].translate({ord('/') : '_', ord('-'): '_', ord('.') : '_'})
+
+    def render(self, layout_name):
+        fn = getattr(self, 'render_' + self.prepare_layout_name(layout_name), None)
+        assert fn is not None and not isinstance(fn, NanoJekyllValue)
+        return fn()
