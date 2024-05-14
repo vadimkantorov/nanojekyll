@@ -12,6 +12,8 @@ layouts_dir = '_layouts'
 includes_dir = '_includes'
 icons_dir = '_includes/social-icons'
 
+codegen_py = 'nanojekyllcodegen.py'
+
 includes_basenames = ['footer.html', 'head.html', 'custom-head.html', 'social.html', 'social-item.html', 'svg_symbol.html', 'google-analytics.html',   'header.html', 'disqus_comments.html']
 
 icons_basenames = ['devto.svg', 'flickr.svg', 'google_scholar.svg', 'linkedin.svg', 'pinterest.svg', 'telegram.svg', 'youtube.svg', 'dribbble.svg', 'github.svg', 'instagram.svg', 'mastodon.svg', 'rss.svg', 'twitter.svg', 'facebook.svg', 'gitlab.svg', 'keybase.svg', 'microdotblog.svg', 'stackoverflow.svg', 'x.svg']
@@ -19,7 +21,7 @@ icons_basenames = ['devto.svg', 'flickr.svg', 'google_scholar.svg', 'linkedin.sv
 layouts_basenames = ['base.html', 'page.html', 'post.html', 'home.html']
 
 static_assets = {
-    'assets/css/style.css' : None
+    'assets/css/style.css' : 'assets/css/style.css'
 }
 dynamic_assets = {
     'assets/minima-social-icons.liquid' : 'assets/minima-social-icons.svg'
@@ -38,7 +40,11 @@ posts = {
     '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
 }
 
-ctx = json.load(open('context.json'))
+context_path = 'context.json'
+
+#####################################
+
+ctx = json.load(open(context_path))
 
 def read_template(path):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
@@ -53,7 +59,7 @@ def render(cls, ctx = {}, content = '', template_name = '', templates = {}): # h
         template_name = ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
     return content
 
-###############
+#####################################
 
 icons = {os.path.join(os.path.basename(icons_dir), basename) : open(os.path.join(icons_dir, basename)).read() for basename in icons_basenames} 
 
@@ -64,7 +70,10 @@ templates_posts = {input_path: read_template(input_path) for input_path in posts
 templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
 
 templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
-cls = nanojekyll.NanoJekyllTemplate.makecls({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables)
+cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables)
+
+open(codegen_py, 'w').write(python_source)
+print(codegen_py)
 
 os.makedirs(output_dir, exist_ok = True)
 print(output_dir)
