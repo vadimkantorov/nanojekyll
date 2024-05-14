@@ -1,5 +1,6 @@
 import os
 import json
+import markdown
 
 import nanojekyll
 
@@ -39,28 +40,17 @@ posts = {
 
 ctx = json.load(open('context.json'))
 
-def read_template(path, front_matter_sep = '---\n'):
-    front_matter, template = '', ''
-    with open(path) as f:
-        line = f.readline()
-        if line == front_matter_sep:
-            front_matter += front_matter_sep
-            while (line := f.readline()) != front_matter_sep:
-                front_matter += line
-            front_matter += front_matter_sep
-        else:
-            template += line
-        template += f.read()
-    return front_matter, template
+def read_template(path):
+    frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
+    if path.endswith('.md'):
+        content = markdown.markdown(content)
+    return frontmatter, content
 
-def extract_layout_from_frontmatter(frontmatter):
-    return ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
-    
-def render(cls, ctx = {}, layout = '', content = '', layouts = {}): # https://jekyllrb.com/docs/rendering-process/
-    while layout:
-        frontmatter, template = [l for k, l in layouts.items() if k == layout or os.path.splitext(k)[0] == layout][0] 
-        content = cls(ctx | dict(content = content)).render(layout)
-        layout = extract_layout_from_frontmatter(frontmatter)
+def render(cls, ctx = {}, content = '', template_name = '', templates = {}): # https://jekyllrb.com/docs/rendering-process/
+    while template_name:
+        frontmatter, template = [l for k, l in templates.items() if k == template_name or os.path.splitext(k)[0] == template_name][0] 
+        content = cls(ctx | dict(content = content)).render(template_name)
+        template_name = ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
     return content
 
 ###############
@@ -89,5 +79,5 @@ for input_path, output_path in list(pages.items()) + list(dynamic_assets.items()
     output_path = os.path.join(output_dir, output_path or input_path)
     os.makedirs(os.path.dirname(output_path), exist_ok = True)
     with open(output_path, 'w') as f:
-        f.write(render(cls, ctx, content = content, layout = input_path, layouts = templates_all))
+        f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
     print(output_path)
