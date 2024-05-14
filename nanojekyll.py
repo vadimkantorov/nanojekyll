@@ -12,6 +12,21 @@ class NanoJekyllTemplate:
     
     def dedent(self, INDENT_STEP = 4):
         self.indent_level -= INDENT_STEP
+
+    @staticmethod
+    def read_template(path, front_matter_sep = '---\n'):
+        front_matter, template = '', ''
+        with open(path) as f:
+            line = f.readline()
+            if line == front_matter_sep:
+                front_matter += front_matter_sep
+                while (line := f.readline()) != front_matter_sep:
+                    front_matter += line
+                front_matter += front_matter_sep
+            else:
+                template += line
+            template += f.read()
+        return front_matter, template
     
     @staticmethod
     def makecls(templates, includes = {}, global_variables = [], return_source = False):
@@ -44,12 +59,11 @@ class NanoJekyllTemplate:
         self.indent()
         self.add_line(f'def render_{function_name}(self):')
         self.indent()
-        self.add_line('''nil, false, true, newline, result = None, False, True, "\\n", []''')
-        self.add_line("class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;")
-        self.add_line("globals().update({k: self.pipify(getattr(self, k)) for k in dir(self) if k != 'ctx' and not k.startswith('__')})")
+        self.add_line('''nil, false, true, newline, forloop, result = None, False, True, "\\n", self.forloop, []''')
 
-        if self.global_variables:
-            self.add_line(', '.join(self.global_variables) + ' = ' +  ', '.join(f'NanoJekyllValue(self.ctx.get({k!r}))' for k in self.global_variables))
+        filters_names = [k for k in dir(NanoJekyllValue) if k.startswith('_') and not k.startswith('__') and k != 'ctx']
+        self.add_line((', '.join(k.removeprefix('_') for k in filters_names) or '()') + ' = ' + ((', '.join(f'self.pipify(self.{k})' for k in filters_names) or '()')))
+        self.add_line((', '.join(self.global_variables) or '()') + ' = ' +  (', '.join(f'NanoJekyllValue(self.ctx.get({k!r}))' for k in self.global_variables) or '()') )
 
         tokens = split_tokens(template_code)
         
@@ -136,9 +150,8 @@ class NanoJekyllTemplate:
                     else:
                         template_name = ' '.join(words[1:]).replace('{{', '{').replace('}}', '}')
                         template_name = 'f' + repr(template_name)
-                        self.add_line('includes = ' + repr(self.includes))
                         self.add_line('include_name = ' + template_name)
-                        self.add_line('result.append(includes[include_name][-1])')
+                        self.add_line('result.append(self.includes[include_name][-1])')
                 
                 elif words[0] == 'assign':
                     assert words[2] == '='
@@ -164,6 +177,7 @@ class NanoJekyllTemplate:
 
         self.add_line('return self.finalize_result(result)')
         self.dedent()
+        self.add_line('includes = ' + repr(self.includes))
         self.dedent()
         assert self.indent_level == 0
     
@@ -178,11 +192,11 @@ class NanoJekyllTemplate:
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
                 if not func_args:
-                    code = f'{code} | _{func_name}()'
+                    code = f'{code} | {func_name}()'
                 else:
                     assert len(func_args) == 1
                     func_args = ', '.join(map(self._expr_code, func_args[0].split(',')))
-                    code = f'{code} | _{func_name}({func_args})'
+                    code = f'{code} | {func_name}({func_args})'
                     
         elif "." in expr:
             code = expr
@@ -370,6 +384,8 @@ class NanoJekyllValue:
     @staticmethod
     def prepare_layout_name(layout_name):
         return os.path.splitext(layout_name)[0].translate({ord('/') : '_', ord('-'): '_', ord('.') : '_'})
+    
+    class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1
 
     def render(self, layout_name):
         fn = getattr(self, 'render_' + self.prepare_layout_name(layout_name), None)
