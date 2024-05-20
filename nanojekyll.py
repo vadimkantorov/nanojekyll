@@ -55,8 +55,8 @@ class NanoJekyllTemplate:
         self.indent_level += 1
         self.add_line('''nil, false, true, forloop, result = None, False, True, self.forloop, []''')
 
-        filters_names = [k for k in dir(NanoJekyllContext) if k.startswith('_') and not k.startswith('__') and k != 'ctx']
-        self.add_line((', '.join(k.removeprefix('_') for k in filters_names) or '()') + ' = ' + ((', '.join(f'self.pipify(self.{k})' for k in filters_names) or '()')))
+        filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
+        self.add_line((', '.join(k.removeprefix('_').removesuffix('_') for k in filters_names) or '()') + ' = ' + ((', '.join(f'self.pipify(self.{k})' for k in filters_names) or '()')))
         self.add_line((', '.join(self.global_variables) or '()') + ' = ' +  (', '.join(NanoJekyllContext.__name__ + f'(self.ctx.get({k!r}))' for k in self.global_variables) or '()') )
 
         template_code = template_code or getattr(self, 'template_code', '')
@@ -212,9 +212,10 @@ class NanoJekyllContext:
     class TrimLeft(str): pass
     class TrimRight(str): pass
     
-    # https://shopify.github.io/liquid/basics/operators/
-    def __init__(self, ctx = None):
+    def __init__(self, ctx = None, metafunction = None):
+        # https://shopify.github.io/liquid/basics/operators/
         self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllContext) else ctx
+        self.metafunction = metafunction
     
     def __or__(self, other):
         return NanoJekyllContext(other[0](self.ctx, *other[1:]))
@@ -271,116 +272,6 @@ class NanoJekyllContext:
     @staticmethod
     def pipify(f):
         return (lambda *args: (f, *args))
-    
-    # https://shopify.github.io/liquid/basics/operators/
-    # https://jekyllrb.com/docs/liquid/filters/
-
-    @staticmethod
-    def _relative_url(url):
-        # https://jekyllrb.com/docs/liquid/filters/
-        return ('.' + url) if url.startswith('/') else url
-
-    @staticmethod
-    def _absolute_url(url):
-        # https://jekyllrb.com/docs/liquid/filters/
-        return url
-    
-    @staticmethod
-    def _date_to_xmlschema(dt):
-        pass
-    
-    @staticmethod
-    def _date(dt, date_format):
-        # https://shopify.github.io/liquid/filters/date/
-        return dt #.strftime(date_format)
-
-    @staticmethod
-    def _escape(s):
-        # https://shopify.github.io/liquid/filters/escape/
-        return html.escape(str(s)) if s else ''
-    
-    @staticmethod
-    def _default(s, t):
-        # https://shopify.github.io/liquid/filters/default/
-        return s or t
-
-    @staticmethod
-    def _where(xs, key, value):
-        # https://shopify.github.io/liquid/filters/where/
-        return [x for x in xs if x[key] == value]
-
-    @staticmethod
-    def _map(xs, key):
-        # https://shopify.github.io/liquid/filters/map/
-        return [x[key] for x in xs] if xs else []
-    
-    @staticmethod
-    def _append(xs, item):
-        # https://shopify.github.io/liquid/filters/append/
-        return str(xs or '') + str(item or '')
-
-    @staticmethod
-    def _first(xs):
-        # https://shopify.github.io/liquid/filters/first/
-        return xs[0] if xs else None
-
-    @staticmethod
-    def _size(xs):
-        # https://shopify.github.io/liquid/filters/size/
-        return len(xs)
-
-    @staticmethod
-    def _join(xs, sep):
-        # https://shopify.github.io/liquid/filters/join/
-        return sep.join(str(x) for x in xs)
-
-    @staticmethod
-    def _remove(x, y):
-        return x.replace(y, '')
-
-    @staticmethod
-    def _jsonify(x):
-        return json.dumps(x, ensure_ascii = False)
-
-    @staticmethod
-    def _xml_escape(x):
-        return x
-
-    @staticmethod
-    def _capitalize(x):
-        return x
-
-    @staticmethod
-    def _smartify(x):
-        return x
-
-    @staticmethod
-    def _where_exp(x, y):
-        return x
-
-    @staticmethod
-    def _sort(x):
-        return sorted(x)
-    
-    @staticmethod
-    def _reverse(x):
-        return list(reversed(x))
-
-    @staticmethod
-    def _strip(x):
-        return x
-
-    @staticmethod
-    def _strip_html(x):
-        return x
-
-    @staticmethod
-    def _normalize_whitespace(x):
-        return x
-
-    @property
-    def size(self):
-        return NanoJekyllContext(len(self) if self else 0)
         
     @staticmethod
     def finalize_result(result):
@@ -408,8 +299,136 @@ class NanoJekyllContext:
         fn = getattr(self, 'render_' + self.sanitize_template_name(template_name), None)
         assert fn is not None and not isinstance(fn, NanoJekyllContext)
         return fn()
+    
+    @property
+    def first(self):
+        return NanoJekyllContext(self._first_(self))
+    
+    @property
+    def size(self):
+        return NanoJekyllContext(self._size_(self))
+    
+    # https://shopify.github.io/liquid/basics/operators/
+    # https://jekyllrb.com/docs/liquid/filters/
+    
+    @staticmethod
+    def _first_(xs):
+        # https://shopify.github.io/liquid/filters/first/
+        return xs[0] if xs else None
+
+    @staticmethod
+    def _size_(xs):
+        # https://shopify.github.io/liquid/filters/size/
+        return len(xs) if xs else 0
+    
+    
+    @staticmethod
+    def _date_to_xmlschema_(dt):
+        # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
+        return str(dt)
+    
+    @staticmethod
+    def _date_(dt, date_format):
+        # https://shopify.github.io/liquid/filters/date/
+        return str(dt) #.strftime(date_format)
+
+    def _relative_url_(self, url):
+        # https://jekyllrb.com/docs/liquid/filters/#relative-url
+        base_url = self.ctx.get('site', {}).get('baseurl', '')
+        if base_url:
+            return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
+        return ('.' + url) if url.startswith('/') else url
+
+    def _absolute_url_(self, url):
+        # https://jekyllrb.com/docs/liquid/filters/#absolute-url
+        site_url = self.ctx.get('site', {}).get('url', '')
+        base_url = self.ctx.get('site', {}).get('baseurl', '')
+        if site_url:
+            return os.path.join(site_url, base_url.lstrip('/'), url.lstrip('/'))
+        if base_url:
+            return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
+        return ('.' + url) if url.startswith('/') else url
+    
+    @staticmethod
+    def _jsonify_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#data-to-json
+        return json.dumps(x, ensure_ascii = False)
+
+    @staticmethod
+    def _default_(s, t):
+        # https://shopify.github.io/liquid/filters/default/
+        return s or t
+
+    @staticmethod
+    def _escape_(s):
+        # https://shopify.github.io/liquid/filters/escape/
+        # https://github.com/shopify/liquid/blob/77bc56a1c28a707c2b222559ffb0b7b1c5588928/lib/liquid/standardfilters.rb#L99
+        return html.escape(str(s)) if s else ''
+    
+    @staticmethod
+    def _xml_escape_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#xml-escape
+        # https://github.com/jekyll/jekyll/blob/96a4198c27482f061e145953066af501d5e085e2/lib/jekyll/filters.rb#L77
+        return html.escape(str(s)) if s else ''
+
+    @staticmethod
+    def _append_(xs, item):
+        # https://shopify.github.io/liquid/filters/append/
+        return str(xs or '') + str(item or '')
+
+    @staticmethod
+    def _join_(xs, sep = ''):
+        # https://shopify.github.io/liquid/filters/join/
+        return sep.join(str(x) for x in xs)
+
+    @staticmethod
+    def _remove_(x, y):
+        # https://shopify.github.io/liquid/filters/remove/
+        return x.replace(y, '')
+    
+    @staticmethod
+    def _strip_(x):
+        # https://shopify.github.io/liquid/filters/strip/
+        return str(x).strip() if x else ''
+
+    @staticmethod
+    def _normalize_whitespace_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#normalize-whitespace
+        return ' '.join(str(x).split()) if x else ''
+    
+    @staticmethod
+    def _strip_html_(x):
+        # https://shopify.github.io/liquid/filters/strip_html/
+        return re.sub(r'<[^>]+>', '', str(x)) if x else ''
+    
+    @staticmethod
+    def _capitalize_(x):
+        # https://shopify.github.io/liquid/filters/capitalize/
+        return ' '.join(word.title() if i == 0 else word.lower() for i, word in enumerate(str(x).split())) if x else ''
+
+    @staticmethod
+    def _sort_(x):
+        # https://shopify.github.io/liquid/filters/sort/
+        return sorted(x)
+    
+    @staticmethod
+    def _reverse_(x):
+        # https://shopify.github.io/liquid/filters/reverse/
+        return list(reversed(x))
+    
+    @staticmethod
+    def _where_(xs, key, value):
+        # https://shopify.github.io/liquid/filters/where/
+        return [x for x in xs if x[key] == value]
+
+    @staticmethod
+    def _map_(xs, key):
+        # https://shopify.github.io/liquid/filters/map/
+        return [x[key] for x in xs] if xs else []
+    
 
 class NanoJekyllPluginFeedMeta(NanoJekyllTemplate):
+    # https://github.com/jekyll/jekyll-feed/blob/master/lib/jekyll-feed/feed.xml
     template_code = '''
 <link type="application/atom+xml" rel="alternate" href='{{ site.feed.path | default: "feed.xml" }}' title="{{ site.title }}" />
 '''
@@ -418,7 +437,7 @@ class NanoJekyllPluginFeedMeta(NanoJekyllTemplate):
     #    indent1, indent2 = ' ' * 4 * self.indent_level, ' ' * 4 * (1 + self.indent_level)
     #    python_source = '\n'.join([
     #        indent1 + 'def render_{template_name}(self):\n'.format(template_name = self.template_name),
-    #        indent2 + '''return ''.format(href=str(self._relative_url("feed.xml")), title=str(self.page.title))'''
+    #        indent2 + '''return '<link type="application/atom+xml" rel="alternate" href="{href}" title="{title}" />'.format(href = str(self._relative_url_("feed.xml")), title = str(self.page.title)) '''
     #    ])
     #    return python_source 
 
