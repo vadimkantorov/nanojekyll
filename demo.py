@@ -4,7 +4,7 @@ import markdown
 
 import nanojekyll
 
-global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll'] # https://jekyllrb.com/docs/variables/
+global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll', 'seo_tag'] # https://jekyllrb.com/docs/variables/
 
 output_dir = '_site'
 
@@ -70,11 +70,13 @@ templates_posts = {input_path: read_template(input_path) for input_path in posts
 templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
 
 templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
-cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables)
-
-open(codegen_py, 'w').write(python_source)
+cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta})
+with open(codegen_py, 'w') as f:
+    f.write(python_source)
 print(codegen_py)
+#cls = __import__('nanojekyllcodegen').NanoJekyllContext
 
+assert cls
 os.makedirs(output_dir, exist_ok = True)
 print(output_dir)
 for input_path, output_path in static_assets.items():

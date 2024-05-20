@@ -6,3 +6,5 @@ curl -O https://raw.githubusercontent.com/vadimkantorov/nanojekyll/master/jekyll
 python demo.py
 # https://github.com/aosabook/500lines/tree/master/template-engine as a starting point
 ```
+
+A more mature is https://github.com/pwwang/liquidpy
