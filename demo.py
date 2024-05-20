@@ -1,3 +1,5 @@
+# TODO: read from _config.yml using https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
+
 import os
 import json
 import markdown
@@ -40,11 +42,156 @@ posts = {
     '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
 }
 
-context_path = 'context.json'
+context = {
+    "jekyll": {"environment": "production"},
+    "paginator" : {
+        "previous_page_path" : "/previous/page/path", 
+        "next_page_path"     : "/next/page/path",
+        "page"               : 2,
+        "previous_page"      : 1,
+        "next_page"          : 3 
+    },
 
-#####################################
+    "site" : {
+        "title": "Your awesome title",
+        "description": "Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.",
+        "author": {
+            "name": "GitHub User",
+            "email": "your-email@domain.com"
+        },
+        
+        "minima" : {
+            "date_format": "%b %-d, %Y",
+            "social_links": [
+                {"platform": "devto"           , "user_url": "https://dev.to/jekyll"},
+                {"platform": "dribbble"        , "user_url": "https://dribbble.com/jekyll"},
+                {"platform": "facebook"        , "user_url": "https://www.facebook.com/jekyll"},
+                {"platform": "flickr"          , "user_url": "https://www.flickr.com/photos/jekyll"},
+                {"platform": "github"          , "user_url": "https://github.com/jekyll/minima"},
+                {"platform": "google_scholar"  , "user_url": "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"},
+                {"platform": "instagram"       , "user_url": "https://www.instagram.com/jekyll"},
+                {"platform": "keybase"         , "user_url": "https://keybase.io/jekyll"},
+                {"platform": "linkedin"        , "user_url": "https://www.linkedin.com/in/jekyll"},
+                {"platform": "microdotblog"    , "user_url": "https://micro.blog/jekyll"},
+                {"platform": "pinterest"       , "user_url": "https://www.pinterest.com/jekyll"},
+                {"platform": "stackoverflow"   , "user_url": "https://stackoverflow.com/users/1234567/jekyll"},
+                {"platform": "telegram"        , "user_url": "https://t.me/jekyll"},
+                {"platform": "twitter"         , "user_url": "https://twitter.com/jekyllrb"},
+                {"platform": "youtube"         , "user_url": "https://www.youtube.com/jekyll"},
+                {"platform": "rss"             , "user_url": "https://jekyll.github.io/minima/feed.xml"},
 
-ctx = json.load(open(context_path))
+                {"platform": "gitlab"          , "user_url": "https://gitlab.com/jekyll/minima"},
+                {"platform": "mastodon"        , "user_url": "https://mastodon.social/jekyll"},
+                {"platform": "x"               , "user_url": "https://x.com/jekyllrb"}
+            ]
+        },
+        "show_excerpts": False,
+        "baseurl": "/minimapython",
+
+        "webmaster_verifications" : {
+            "google": "googleverif",
+            "bing" : "bingverif",
+            "alexa": "alexaverif",
+            "yandex": "yandexverif",
+            "baidu": "baiduverif",
+            "facebook": "facebookverif"
+        },
+        "facebook": {
+            "admins": "admins",
+            "publisher": "publisher",
+            "app_id": "app_id"
+        },
+        "twitter": {
+            "username": "username"
+        },
+        "feed": {"path": "feed.xml"},
+
+        "header_pages": ["index.md", "about.md"],
+    
+
+
+        "time" : "now",
+        "lang" : "en", 
+        "show_drafts": False,
+        "feed": {
+            "excerpt_only": False
+        },
+
+        "paginate": True,
+
+        "url": "https://vadimkantorov.github.io",
+        "baseurl": "/nanojekyll",
+        
+        "author": {"name": "", "email": "", "uri": ""},
+        
+        "related_posts": [],
+        "static_files": [],
+        "html_pages": [],
+        "html_files": [],
+        "collections": [],
+        "data": [],
+        "documents": [],
+        "categories": {},
+        "tags": {},
+        "pages" : [{"path": "about.md",  "title" : "title", "url": "url", "date": "date"}],
+        "posts" : [{"path": "blogpost.md",  "title" : "title", "url": "url", "date": "date"}]
+    },
+    
+    "page": {
+        "layout": "default",
+        "lang": "en",
+        "title": "title",
+        "list_title"   : "Archive",
+        "description"  : "page description",
+        "category"     : "category",
+        "permalink"    : "permalink",
+        "draft"        : False,
+        "published"    : True,
+        "content"      : "page content",
+        "slug"          : "slug",
+        "categories"    : ["asd", "def"],
+        "tags"          : ["qwe", "rty"],
+        "author"       : ["abc def", "ghi asd"],
+        "collection"    : "collection",
+        "date"          : "date",
+        "modified_date" : "modified date",
+        "path"          : "path",
+        "dir"           : "dir",
+        
+        "excerpt"       : "excerpt",
+        "url"           : "url", 
+        "id"            : "path",
+
+        "twitter"       : {"card":  "summary_large_image"},
+        "image"         : {"path" : "path", "height" : "0", "width" : "0", "alt" : ""},
+
+        "previous"      : None,
+        "next"          : None,
+        "type"          : "page"
+    },
+
+    "seo_tag": {
+        "canonical_url" : "/canonical/url/",
+        "page_locale" : "en_US",
+        "description" : "description",
+        "site_title" : "site title", 
+        "page_title" : "page title",
+        "title" : "page title",
+        "author" : {"name": "name"},
+    
+        "image" : {}, 
+        "json_ld": {
+            "@context" : "https://schema.org",
+            "@type" : "WebPage",
+            "description" : "description", 
+            "url": "canonical url", 
+            "headline" : "page title", 
+            "name": "site title", 
+            "author" : {"@type" : "Person", "name": "name", "url" : "url"} 
+        }
+    }
+}
+
 
 def read_template(path):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
