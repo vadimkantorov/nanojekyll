@@ -1,10 +1,82 @@
 # TODO: read from _config.yml using https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
+# TODO: use a plugin directly to generate feed.xml
+
 
 import os
 import json
 import markdown
 
 import nanojekyll
+
+def yaml_loads(content):
+    procval = lambda val: (val[1:-1] if len(val) >= 2 and ((val[0] == val[-1] == '"') or (val[0] == val[-1] == "'")) else val.split('#', maxsplit = 1)[0].strip()) if val else ''
+
+    lines = content.strip().splitlines()
+
+    res = {}
+    keyprev = ''
+    indentprev = 0
+    dictprev = {}
+    is_multiline = False
+    stack = {0: ({None: res}, None)}
+    begin_multiline_indent = 0
+
+    for line in lines:
+        line_lstrip = line.lstrip()
+        line_strip = line.strip()
+        indent = len(line) - len(line_lstrip)
+        splitted_colon = line.split(':', maxsplit = 1)
+        key, val = (splitted_colon[0].strip(), splitted_colon[1].strip()) if len(splitted_colon) > 1 else ('', line_strip)
+        list_val = line_strip.split('- ', maxsplit = 1)[-1]
+        is_list_item = line_lstrip.startswith('- ')
+        is_comment = not line_strip or line_lstrip.startswith('#')
+        is_dedent = indent < indentprev
+        begin_multiline = val in ['>', '|', '|>']
+        is_record = len(list_val) >= 2 and list_val[0] == '{' and list_val[-1] == '}'
+
+        if is_multiline and begin_multiline_indent and indent < begin_multiline_indent:
+            is_multiline = False
+            begin_multiline_indent = 0
+
+        if not is_multiline:
+            if indent not in stack:
+                stack[indent] = (stack[indentprev][0][stack[indentprev][1]], keyprev) if keyprev is not None else ({None: dictprev}, None)
+            curdict, curkey = stack[indent]
+
+        if is_comment:
+            continue
+
+        elif is_list_item:
+            curdict[curkey] = curdict[curkey] or []
+            if not key or is_record:
+                curdict[curkey].append(procval(list_val))
+            else:
+                dictprev = {key.removeprefix('- ') : procval(val)}
+                curdict[curkey].append(dictprev)
+                key = None
+
+        elif begin_multiline:
+            curdict[curkey][key] = ''
+            curdict, curkey = curdict[curkey], key
+            is_multiline = True
+
+        elif is_multiline:
+            curdict[curkey] += ('\n' + val) if curdict[curkey] else val
+            begin_multiline_indent = min(indent, begin_multiline_indent) if begin_multiline_indent else indent
+
+        elif key and not val:
+            curdict[curkey][key] = dictprev = {}
+
+        else:
+            curdict[curkey][key] = procval(val)
+
+        if is_dedent:
+            stack = {i : v for i, v in stack.items() if i <= indent}
+
+        indentprev = indent
+        keyprev = key
+
+    return res
 
 global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll', 'seo_tag'] # https://jekyllrb.com/docs/variables/
 
