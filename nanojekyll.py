@@ -4,7 +4,7 @@
 import os, sys, re, html, json, datetime
 import inspect
 
-def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True):
+def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
     def procval(val):
         read_until = lambda tail, chars: ([(tail[:i], tail[i+1:]) for i, c in enumerate(tail) if c in chars] or [(tail, '')])[0]
 
