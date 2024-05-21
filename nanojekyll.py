@@ -1,6 +1,3 @@
-# TODO: impl forloop.index
-# TODO: impl "contains" by using "in" and reversing expr and limit:
-
 import os, sys, re, html, json, datetime
 import inspect
 
@@ -72,11 +69,7 @@ def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = 
         elif is_list_item:
             curdict[curkey] = curdict[curkey] or []
             if not key or is_record:
-                try:
-                    curdict[curkey].append(procval(list_val))
-                except:
-                    breakpoint()
-                    print(123)
+                curdict[curkey].append(procval(list_val))
             else:
                 dictprev = {key.removeprefix('- ') : procval(val)}
                 curdict[curkey].append(dictprev)
@@ -153,9 +146,10 @@ class NanoJekyllTemplate:
         # https://shopify.github.io/liquid/tags/iteration/#forloop-object
 
         function_name = NanoJekyllContext.sanitize_template_name(template_name)
+        self.forloop_cnt = 0
         self.add_line(f'def render_{function_name}(self):')
         self.indent_level += 1
-        self.add_line('''nil, false, true, forloop, result = None, False, True, self.forloop, []''')
+        self.add_line('''nil, false, true, forloop, NanoJekyllResult = None, False, True, self.forloop, []''')
 
         filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
         self.add_line((', '.join(k.removeprefix('_').removesuffix('_') for k in filters_names) or '()') + ' = ' + ((', '.join(f'self.pipify(self.{k})' for k in filters_names) or '()')))
@@ -174,11 +168,11 @@ class NanoJekyllTemplate:
             words = token_inner.split()
             
             if b == 3:
-                self.add_line("result.append(self.TrimLeft())")
+                self.add_line("NanoJekyllResult.append(self.NanoJekyllTrimLeft())")
 
             if token.startswith('{{'):
                 expr = self._expr_code(token_inner)
-                self.add_line(f"result.append(str({expr}))")
+                self.add_line(f"NanoJekyllResult.append(str({expr}))")
 
             elif token.startswith('{%'):
                 if words[0] == '-':
@@ -193,16 +187,27 @@ class NanoJekyllTemplate:
     
                 elif words[0] == 'highlight':
                     lang = ''.join(words[1:])
-                    self.add_line(f'result.append("\\n```{lang}\\n")')
+                    self.add_line(f'NanoJekyllResult.append("\\n```{lang}\\n")')
                     tokens_i_end = '{%endhighlight%}'
                     i += 1
                     while tokens[i].replace(' ', '') != tokens_i_end:
-                        self.add_line('result.append(' + repr(tokens[i]) + ')')
+                        self.add_line('NanoJekyllResult.append(' + repr(tokens[i]) + ')')
                         i += 1
-                    self.add_line('result.append("\\n```\\n")')
+                    self.add_line('NanoJekyllResult.append("\\n```\\n")')
+                
+                elif words[0] == 'unless':
+                    ops_stack.append('unless')
+                    if 'contains' in words:
+                        assert len(words) == 4 and words[2] == 'contains'
+                        words = [words[0], words[3], 'in', words[1]]
+                    self.add_line("if not( {} ):".format(' '.join(words[1:])))
+                    self.indent_level += 1
 
                 elif words[0] == 'if':
                     ops_stack.append('if')
+                    if 'contains' in words:
+                        assert len(words) == 4 and words[2] == 'contains'
+                        words = [words[0], words[3], 'in', words[1]]
                     self.add_line("if {}:".format(' '.join(words[1:])))
                     self.indent_level += 1
                 
@@ -217,16 +222,18 @@ class NanoJekyllTemplate:
                     self.add_line("else:".format(' '.join(words[1:])))
                     self.indent_level += 1
                 
-                elif words[0] == 'unless':
-                    ops_stack.append('unless')
-                    self.add_line("if not( {} ):".format(' '.join(words[1:])))
-                    self.indent_level += 1
-                
                 elif words[0] == 'for':
-                    assert len(words) == 4 and words[2] == 'in', f'Dont understand for: {token=}'
+                    # https://shopify.dev/docs/api/liquid/objects/forloop
+                    assert len(words) in [4, 6] and words[2] == 'in', f'Dont understand for: {token=}'
+
                     ops_stack.append('for')
-                    self.add_line('for {} in {}:'.format(words[1], self._expr_code(words[3]) ) )
+                    self.add_line('forloop_{} = list({})'.format(self.forloop_cnt, self._expr_code(words[3])))
+                    if len(words) == 6 and words[4] == 'limit:':
+                        self.add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(self.forloop_cnt, self._expr_code(words[5])))
+                    self.add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], self.forloop_cnt))
                     self.indent_level += 1
+                    self.add_line('forloop.index, forloop.rindex, forloop.rindex0, forloop.first, forloop.last, forloop.length = forloop.index0 + 1, len(forloop_{0}) - forloop.index0, len(forloop_{0}) - forloop.index0 - 1, forloop.index0 == 0, forloop.index0 == len(forloop_{0}) - 1, len(forloop_{0})'.format(self.forloop_cnt))
+                    self.forloop_cnt += 1
                 
                 elif words[0].startswith('end'):
                     # Endsomething.  Pop the ops stack.
@@ -252,7 +259,7 @@ class NanoJekyllTemplate:
                         template_name = ' '.join(words[1:]).replace('{{', '{').replace('}}', '}')
                         template_name = 'f' + repr(template_name)
                         self.add_line('include_name = ' + template_name)
-                        self.add_line('result.append(self.includes[include_name][-1])')
+                        self.add_line('NanoJekyllResult.append(self.includes[include_name][-1])')
                 
                 elif words[0] == 'assign':
                     assert words[2] == '='
@@ -262,21 +269,21 @@ class NanoJekyllTemplate:
 
                 elif words[0] in plugins: 
                     template_name = words[0]
-                    self.add_line(f'assert bool(self.render_plugin_{template_name}); tmp = self.render_plugin_{template_name}(); (result.extend if isinstance(tmp, list) else result.append)(tmp)')
+                    self.add_line(f'assert bool(self.render_plugin_{template_name}); tmp = self.render_plugin_{template_name}(); (NanoJekyllResult.extend if isinstance(tmp, list) else NanoJekyllResult.append)(tmp)')
                 else:
                     assert False, ('Dont understand tag: ' + words[0])
 
             else:
                 if token:
-                    self.add_line("result.append({})".format(repr(token)))
+                    self.add_line("NanoJekyllResult.append({})".format(repr(token)))
             
             if e == -3:
-                self.add_line('result.append(self.TrimRight())')
+                self.add_line('NanoJekyllResult.append(self.NanoJekyllTrimRight())')
             i += 1
 
         assert not ops_stack, ('Unmatched action tag: ' + ops_stack[-1])
 
-        self.add_line('return self.finalize_result(result)')
+        self.add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
     
     def _expr_code(self, expr):
         is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"')) or (expr.startswith("'") and expr.endswith("'"))
@@ -287,6 +294,13 @@ class NanoJekyllTemplate:
 
         elif '|' in expr:
             pipes = list(map(str.strip, expr.split('|')))
+            i = 0
+            while i < len(pipes):
+                if pipes[i].count('"') % 2 == 1:
+                    pipes = pipes[:i] + [pipes[i] + ' | ' + pipes[i + 1]] + pipes[i + 2:]
+                    i += 1
+                i += 1
+
             code = NanoJekyllContext.__name__+ '(' + self._expr_code(pipes[0]) + ')' if is_string_literal(pipes[0]) else self._expr_code(pipes[0])
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
@@ -310,9 +324,9 @@ class NanoJekyllTemplate:
         self.code.extend([' ' * 4 * self.indent_level, line, "\n"])
 
 class NanoJekyllContext:
-    class forloop: index = 1; last = False; first = False; index0 = 0; length = None; rindex = -1;
-    class TrimLeft(str): pass
-    class TrimRight(str): pass
+    class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1
+    class NanoJekyllTrimLeft(str): pass
+    class NanoJekyllTrimRight(str): pass
     
     def __init__(self, ctx = None):
         # https://shopify.github.io/liquid/basics/operators/
@@ -326,6 +340,9 @@ class NanoJekyllContext:
 
     def __bool__(self):
         return bool(self.ctx)
+
+    def __int__(self):
+        return int(self.ctx)
 
     def __gt__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
@@ -351,17 +368,19 @@ class NanoJekyllContext:
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
         return self.ctx != other
         
-    def __getattr__(self, key):
+    def __getattr__(self, other):
         if isinstance(self.ctx, dict):
-            if key in self.ctx:
-                return NanoJekyllContext(self.ctx[key])
-        return NanoJekyllContext(getattr(self.ctx, key, None))
+            if other in self.ctx:
+                return NanoJekyllContext(self.ctx[other])
+        return NanoJekyllContext(getattr(self.ctx, other, None))
     
-    def __getitem__(self, index):
+    def __getitem__(self, other):
+        if not self.ctx:
+            return NanoJekyllContext(None)
         if isinstance(self.ctx, (list, str)):
-            return NanoJekyllContext(self.ctx[index])
+            return NanoJekyllContext(self.ctx[int(other)])
         if isinstance(self.ctx, dict):
-            return NanoJekyllContext(self.ctx.get(index))
+            return NanoJekyllContext(self.ctx.get(str(other)))
         return NanoJekyllContext(None)
 
     def __len__(self):
@@ -375,14 +394,14 @@ class NanoJekyllContext:
         return (lambda *args: (f, *args))
         
     @staticmethod
-    def finalize_result(result):
+    def NanoJekyllResultFinalize(result):
         # https://shopify.github.io/liquid/basics/whitespace/
         res = ''
         trimming = False
         for s in result:
-            if isinstance(s, NanoJekyllContext.TrimLeft):
+            if isinstance(s, NanoJekyllContext.NanoJekyllTrimLeft):
                 res = res.rstrip()
-            elif isinstance(s, NanoJekyllContext.TrimRight):
+            elif isinstance(s, NanoJekyllContext.NanoJekyllTrimRight):
                 trimming = True
             else:
                 if trimming:
@@ -396,8 +415,8 @@ class NanoJekyllContext:
     def sanitize_template_name(template_name):
         return os.path.splitext(template_name)[0].translate({ord('/') : '_', ord('-'): '_', ord('.') : '_'})
 
-    def render(self, template_name):
-        fn = getattr(self, 'render_' + self.sanitize_template_name(template_name), None)
+    def render(self, template_name, is_plugin = False):
+        fn = getattr(self, ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name), None)
         assert fn is not None and not isinstance(fn, NanoJekyllContext)
         return fn()
     
@@ -425,15 +444,16 @@ class NanoJekyllContext:
     @staticmethod
     def _date_to_xmlschema_(dt):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
-        return str(dt)
+        return str(dt) if dt else ''
     
     @staticmethod
     def _date_(dt, date_format):
         # https://shopify.github.io/liquid/filters/date/
-        return str(dt) #.strftime(date_format)
+        return str(dt) if dt else '' #.strftime(date_format)
 
     def _relative_url_(self, url):
         # https://jekyllrb.com/docs/liquid/filters/#relative-url
+        url = str(url) if url else ''
         base_url = self.ctx.get('site', {}).get('baseurl', '')
         if base_url:
             return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
@@ -441,6 +461,7 @@ class NanoJekyllContext:
 
     def _absolute_url_(self, url):
         # https://jekyllrb.com/docs/liquid/filters/#absolute-url
+        url = str(url) if url else ''
         site_url = self.ctx.get('site', {}).get('url', '')
         base_url = self.ctx.get('site', {}).get('baseurl', '')
         if site_url:
@@ -452,7 +473,7 @@ class NanoJekyllContext:
     @staticmethod
     def _jsonify_(x):
         # https://jekyllrb.com/docs/liquid/filters/#data-to-json
-        return json.dumps(x, ensure_ascii = False)
+        return json.dumps(x, ensure_ascii = False) if x else '{}'
 
     @staticmethod
     def _default_(s, t):
@@ -466,7 +487,7 @@ class NanoJekyllContext:
         return html.escape(str(s)) if s else ''
     
     @staticmethod
-    def _xml_escape_(x):
+    def _xml_escape_(s):
         # https://jekyllrb.com/docs/liquid/filters/#xml-escape
         # https://github.com/jekyll/jekyll/blob/96a4198c27482f061e145953066af501d5e085e2/lib/jekyll/filters.rb#L77
         return html.escape(str(s)) if s else ''
@@ -479,12 +500,12 @@ class NanoJekyllContext:
     @staticmethod
     def _join_(xs, sep = ''):
         # https://shopify.github.io/liquid/filters/join/
-        return sep.join(str(x) for x in xs)
+        return sep.join(str(x) for x in xs) if xs else ''
 
     @staticmethod
     def _remove_(x, y):
         # https://shopify.github.io/liquid/filters/remove/
-        return x.replace(y, '')
+        return x.replace(y, '') if x else ''
     
     @staticmethod
     def _strip_(x):
@@ -507,34 +528,36 @@ class NanoJekyllContext:
         return ' '.join(word.title() if i == 0 else word.lower() for i, word in enumerate(str(x).split())) if x else ''
 
     @staticmethod
-    def _sort_(x):
+    def _sort_(xs, key = ''):
         # https://shopify.github.io/liquid/filters/sort/
-        return sorted(x)
+        expr = eval(f'lambda item: item.{key}') if key else None
+        return sorted([NanoJekyllContext(x) for x in xs], key = expr) if xs else []
     
     @staticmethod
     def _reverse_(x):
         # https://shopify.github.io/liquid/filters/reverse/
-        return list(reversed(x))
+        return list(reversed(x)) if x else ''
     
     @staticmethod
     def _where_(xs, key, value):
         # https://shopify.github.io/liquid/filters/where/
-        return [x for x in xs if x[key] == value]
+        return [x for x in xs if x.get(key, None) == value] if xs else []
 
     @staticmethod
     def _map_(xs, key):
         # https://shopify.github.io/liquid/filters/map/
         return [x[key] for x in xs] if xs else []
     
+    @staticmethod
     def _where_exp_(xs, key, value):
         # https://jekyllrb.com/docs/liquid/filters/#where-expression
-        expr_test = eval(f'lambda {key}: {value}', dict(nil = None, false = False, true = True))
-        return [x for x in xs if expr_test(x)] if xs else []
+        expr = eval(f'lambda {key}: {value}', dict(nil = None, false = False, true = True))
+        return [x for x in xs if expr(NanoJekyllContext(x))] if xs else []
     
     @staticmethod
     def _smartify_(x):
         # https://jekyllrb.com/docs/liquid/filters/#smartify
-        return str(x)
+        return str(x) if x else ''
 
 
 class NanoJekyllPluginSeo(NanoJekyllTemplate):
