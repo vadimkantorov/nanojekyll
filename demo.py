@@ -1,6 +1,3 @@
-# TODO: use a plugin directly to generate feed.xml
-
-
 import os
 import json
 import markdown
@@ -62,23 +59,19 @@ config = nanojekyll.yaml_loads(open(config_yml).read())
 ctx = dict(site = config | platform_configs, jekyll = dict(environment = "production"))
 
 ctx["site"].update({
-    "feed": {"path": "feed.xml"},
+    "feed": {"path": "feed.xml", "excerpt_only": False},
+
     "header_pages": ["index.md", "about.md"],
 
 
     "time" : "now",
     "lang" : "en", 
     "show_drafts": False,
-    "feed": {
-        "excerpt_only": False
-    },
 
     "paginate": True,
 
     "url": "https://vadimkantorov.github.io",
     "baseurl": "/nanojekyll",
-    
-    "author": {"name": "", "email": "", "uri": ""},
     
     "related_posts": [],
     "static_files": [],
@@ -88,13 +81,12 @@ ctx["site"].update({
     "data": [],
     "documents": [],
     "categories": {},
-    "tags": {},
     "pages" : [{"path": "about.md",  "title" : "title", "url": "url", "date": "date"}],
     "posts" : [{"path": "blogpost.md",  "title" : "title", "url": "url", "date": "date"}]
 })
     
 
-ctx = {
+ctx.update({
 
     "paginator" : {
         "previous_page_path" : "/previous/page/path", 
@@ -110,16 +102,16 @@ ctx = {
         "title": "title",
         "list_title"   : "Archive",
         "description"  : "page description",
-        "category"     : "category",
+        #"category"     : "category",
         "permalink"    : "permalink",
         "draft"        : False,
         "published"    : True,
         "content"      : "page content",
         "slug"          : "slug",
         "categories"    : ["asd", "def"],
-        "tags"          : ["qwe", "rty"],
+        #"tags"          : ["qwe", "rty"],
         "author"       : ["abc def", "ghi asd"],
-        "collection"    : "collection",
+        "collection"    : "posts",
         "date"          : "date",
         "modified_date" : "modified date",
         "path"          : "path",
@@ -157,7 +149,7 @@ ctx = {
             "author" : {"@type" : "Person", "name": "name", "url" : "url"} 
         }
     }
-}
+})
 
 def read_template(path):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
@@ -183,13 +175,24 @@ templates_posts = {input_path: read_template(input_path) for input_path in posts
 templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
 
 templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
-cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta})#, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml})
+cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml})
 with open(codegen_py, 'w') as f:
     f.write(python_source)
-print(codegen_py)
 #cls = __import__('nanojekyllcodegen').NanoJekyllContext
+print(codegen_py)
 
 assert cls
+
+if output_path := ctx['site'].get('feed', {}).get('path', ''):
+    # set up page
+    output_path = os.path.join(output_dir, output_path)
+    os.makedirs(os.path.dirname(output_path), exist_ok = True)
+    with open(output_path, 'w') as f:
+        content = cls(ctx).render('feed_meta_xml', is_plugin = True)
+        f.write(content)
+    print(output_path)
+
+
 os.makedirs(output_dir, exist_ok = True)
 print(output_dir)
 for input_path, output_path in static_assets.items():
