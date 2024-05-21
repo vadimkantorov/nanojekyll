@@ -1,4 +1,3 @@
-# TODO: read from _config.yml using https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
 # TODO: use a plugin directly to generate feed.xml
 
 
@@ -8,99 +7,24 @@ import markdown
 
 import nanojekyll
 
-def yaml_loads(content):
-    procval = lambda val: (val[1:-1] if len(val) >= 2 and ((val[0] == val[-1] == '"') or (val[0] == val[-1] == "'")) else val.split('#', maxsplit = 1)[0].strip()) if val else ''
-
-    lines = content.strip().splitlines()
-
-    res = {}
-    keyprev = ''
-    indentprev = 0
-    dictprev = {}
-    is_multiline = False
-    stack = {0: ({None: res}, None)}
-    begin_multiline_indent = 0
-
-    for line in lines:
-        line_lstrip = line.lstrip()
-        line_strip = line.strip()
-        indent = len(line) - len(line_lstrip)
-        splitted_colon = line.split(':', maxsplit = 1)
-        key, val = (splitted_colon[0].strip(), splitted_colon[1].strip()) if len(splitted_colon) > 1 else ('', line_strip)
-        list_val = line_strip.split('- ', maxsplit = 1)[-1]
-        is_list_item = line_lstrip.startswith('- ')
-        is_comment = not line_strip or line_lstrip.startswith('#')
-        is_dedent = indent < indentprev
-        begin_multiline = val in ['>', '|', '|>']
-        is_record = len(list_val) >= 2 and list_val[0] == '{' and list_val[-1] == '}'
-
-        if is_multiline and begin_multiline_indent and indent < begin_multiline_indent:
-            is_multiline = False
-            begin_multiline_indent = 0
-
-        if not is_multiline:
-            if indent not in stack:
-                stack[indent] = (stack[indentprev][0][stack[indentprev][1]], keyprev) if keyprev is not None else ({None: dictprev}, None)
-            curdict, curkey = stack[indent]
-
-        if is_comment:
-            continue
-
-        elif is_list_item:
-            curdict[curkey] = curdict[curkey] or []
-            if not key or is_record:
-                curdict[curkey].append(procval(list_val))
-            else:
-                dictprev = {key.removeprefix('- ') : procval(val)}
-                curdict[curkey].append(dictprev)
-                key = None
-
-        elif begin_multiline:
-            curdict[curkey][key] = ''
-            curdict, curkey = curdict[curkey], key
-            is_multiline = True
-
-        elif is_multiline:
-            curdict[curkey] += ('\n' + val) if curdict[curkey] else val
-            begin_multiline_indent = min(indent, begin_multiline_indent) if begin_multiline_indent else indent
-
-        elif key and not val:
-            curdict[curkey][key] = dictprev = {}
-
-        else:
-            curdict[curkey][key] = procval(val)
-
-        if is_dedent:
-            stack = {i : v for i, v in stack.items() if i <= indent}
-
-        indentprev = indent
-        keyprev = key
-
-    return res
+config_yml = '_config.yml'
 
 global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll', 'seo_tag'] # https://jekyllrb.com/docs/variables/
 
 output_dir = '_site'
-
 layouts_dir = '_layouts'
 includes_dir = '_includes'
 icons_dir = '_includes/social-icons'
-
 codegen_py = 'nanojekyllcodegen.py'
-
 includes_basenames = ['footer.html', 'head.html', 'custom-head.html', 'social.html', 'social-item.html', 'svg_symbol.html', 'google-analytics.html',   'header.html', 'disqus_comments.html']
-
 icons_basenames = ['devto.svg', 'flickr.svg', 'google_scholar.svg', 'linkedin.svg', 'pinterest.svg', 'telegram.svg', 'youtube.svg', 'dribbble.svg', 'github.svg', 'instagram.svg', 'mastodon.svg', 'rss.svg', 'twitter.svg', 'facebook.svg', 'gitlab.svg', 'keybase.svg', 'microdotblog.svg', 'stackoverflow.svg', 'x.svg']
-
 layouts_basenames = ['base.html', 'page.html', 'post.html', 'home.html']
-
 static_assets = {
     'assets/css/style.css' : 'assets/css/style.css'
 }
 dynamic_assets = {
     'assets/minima-social-icons.liquid' : 'assets/minima-social-icons.svg'
 }
-
 pages = {
     '404.html' : '404.html',
     'index.md' : 'index.html', 
@@ -114,8 +38,64 @@ posts = {
     '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
 }
 
-context = {
-    "jekyll": {"environment": "production"},
+platform_configs = {
+    "webmaster_verifications" : {
+        "google": "googleverif",
+        "bing" : "bingverif",
+        "alexa": "alexaverif",
+        "yandex": "yandexverif",
+        "baidu": "baiduverif",
+        "facebook": "facebookverif"
+    },
+    "facebook": {
+        "admins": "admins",
+        "publisher": "publisher",
+        "app_id": "app_id"
+    },
+    "twitter": {
+        "username": "username"
+    }
+}
+
+config = nanojekyll.yaml_loads(open(config_yml).read())
+
+ctx = dict(site = config | platform_configs, jekyll = dict(environment = "production"))
+
+ctx["site"].update({
+    "feed": {"path": "feed.xml"},
+    "header_pages": ["index.md", "about.md"],
+
+
+    "time" : "now",
+    "lang" : "en", 
+    "show_drafts": False,
+    "feed": {
+        "excerpt_only": False
+    },
+
+    "paginate": True,
+
+    "url": "https://vadimkantorov.github.io",
+    "baseurl": "/nanojekyll",
+    
+    "author": {"name": "", "email": "", "uri": ""},
+    
+    "related_posts": [],
+    "static_files": [],
+    "html_pages": [],
+    "html_files": [],
+    "collections": [],
+    "data": [],
+    "documents": [],
+    "categories": {},
+    "tags": {},
+    "pages" : [{"path": "about.md",  "title" : "title", "url": "url", "date": "date"}],
+    "posts" : [{"path": "blogpost.md",  "title" : "title", "url": "url", "date": "date"}]
+})
+    
+
+ctx = {
+
     "paginator" : {
         "previous_page_path" : "/previous/page/path", 
         "next_page_path"     : "/next/page/path",
@@ -124,91 +104,6 @@ context = {
         "next_page"          : 3 
     },
 
-    "site" : {
-        "title": "Your awesome title",
-        "description": "Write an awesome description for your new site here. You can edit this line in _config.yml. It will appear in your document head meta (for Google search results) and in your feed.xml site description.",
-        "author": {
-            "name": "GitHub User",
-            "email": "your-email@domain.com"
-        },
-        
-        "minima" : {
-            "date_format": "%b %-d, %Y",
-            "social_links": [
-                {"platform": "devto"           , "user_url": "https://dev.to/jekyll"},
-                {"platform": "dribbble"        , "user_url": "https://dribbble.com/jekyll"},
-                {"platform": "facebook"        , "user_url": "https://www.facebook.com/jekyll"},
-                {"platform": "flickr"          , "user_url": "https://www.flickr.com/photos/jekyll"},
-                {"platform": "github"          , "user_url": "https://github.com/jekyll/minima"},
-                {"platform": "google_scholar"  , "user_url": "https://scholar.google.com/citations?user=qc6CJjYAAAAJ"},
-                {"platform": "instagram"       , "user_url": "https://www.instagram.com/jekyll"},
-                {"platform": "keybase"         , "user_url": "https://keybase.io/jekyll"},
-                {"platform": "linkedin"        , "user_url": "https://www.linkedin.com/in/jekyll"},
-                {"platform": "microdotblog"    , "user_url": "https://micro.blog/jekyll"},
-                {"platform": "pinterest"       , "user_url": "https://www.pinterest.com/jekyll"},
-                {"platform": "stackoverflow"   , "user_url": "https://stackoverflow.com/users/1234567/jekyll"},
-                {"platform": "telegram"        , "user_url": "https://t.me/jekyll"},
-                {"platform": "twitter"         , "user_url": "https://twitter.com/jekyllrb"},
-                {"platform": "youtube"         , "user_url": "https://www.youtube.com/jekyll"},
-                {"platform": "rss"             , "user_url": "https://jekyll.github.io/minima/feed.xml"},
-
-                {"platform": "gitlab"          , "user_url": "https://gitlab.com/jekyll/minima"},
-                {"platform": "mastodon"        , "user_url": "https://mastodon.social/jekyll"},
-                {"platform": "x"               , "user_url": "https://x.com/jekyllrb"}
-            ]
-        },
-        "show_excerpts": False,
-        "baseurl": "/minimapython",
-
-        "webmaster_verifications" : {
-            "google": "googleverif",
-            "bing" : "bingverif",
-            "alexa": "alexaverif",
-            "yandex": "yandexverif",
-            "baidu": "baiduverif",
-            "facebook": "facebookverif"
-        },
-        "facebook": {
-            "admins": "admins",
-            "publisher": "publisher",
-            "app_id": "app_id"
-        },
-        "twitter": {
-            "username": "username"
-        },
-        "feed": {"path": "feed.xml"},
-
-        "header_pages": ["index.md", "about.md"],
-    
-
-
-        "time" : "now",
-        "lang" : "en", 
-        "show_drafts": False,
-        "feed": {
-            "excerpt_only": False
-        },
-
-        "paginate": True,
-
-        "url": "https://vadimkantorov.github.io",
-        "baseurl": "/nanojekyll",
-        
-        "author": {"name": "", "email": "", "uri": ""},
-        
-        "related_posts": [],
-        "static_files": [],
-        "html_pages": [],
-        "html_files": [],
-        "collections": [],
-        "data": [],
-        "documents": [],
-        "categories": {},
-        "tags": {},
-        "pages" : [{"path": "about.md",  "title" : "title", "url": "url", "date": "date"}],
-        "posts" : [{"path": "blogpost.md",  "title" : "title", "url": "url", "date": "date"}]
-    },
-    
     "page": {
         "layout": "default",
         "lang": "en",
@@ -264,7 +159,6 @@ context = {
     }
 }
 
-
 def read_template(path):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
     if path.endswith('.md'):
@@ -289,7 +183,7 @@ templates_posts = {input_path: read_template(input_path) for input_path in posts
 templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
 
 templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
-cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta})
+cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta})#, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml})
 with open(codegen_py, 'w') as f:
     f.write(python_source)
 print(codegen_py)
