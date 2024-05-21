@@ -1,7 +1,103 @@
-# TODO: impl filters, fixup first/last, delete prefix _
+# TODO: impl forloop.index
+# TODO: impl "contains" by using "in" and reversing expr
 
 import os, sys, re, html, json, datetime
 import inspect
+
+def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True):
+    def procval(val):
+        read_until = lambda tail, chars: ([(tail[:i], tail[i+1:]) for i, c in enumerate(tail) if c in chars] or [(tail, '')])[0]
+
+        val = val.strip()
+        is_quoted_string = len(val) >= 2 and ((val[0] == val[-1] == '"') or (val[0] == val[-1] == "'"))
+        if is_quoted_string:
+            return val[1:-1]
+        else:
+            val = val.split('#', maxsplit = 1)[0].strip()
+            is_int = val.isdigit()
+            is_bool = val.lower() in ['true', 'false']
+            is_dict = len(val) >= 2 and (val[0] == '{' and val[-1] == '}')
+            if is_int and convert_int:
+                return int(val) if convert_int else val
+            elif is_bool and convert_bool:
+                return dict(true = True, false = False)[val.lower()] if convert_int else val
+            elif is_dict and convert_dict:
+                res = {}
+                tail = val
+                head, tail = read_until(tail, '{')
+                while tail:
+                    key, tail = read_until(tail, ':')
+                    val, tail = read_until(tail, ',}')
+                    res[key.strip()] = procval(val.strip())
+                return res
+        return val
+
+    lines = content.strip().splitlines()
+
+    res = {}
+    keyprev = ''
+    indentprev = 0
+    dictprev = {}
+    is_multiline = False
+    stack = {0: ({None: res}, None)}
+    begin_multiline_indent = 0
+
+    for line in lines:
+        line_lstrip = line.lstrip()
+        line_strip = line.strip()
+        indent = len(line) - len(line_lstrip)
+        splitted_colon = line.split(':', maxsplit = 1)
+        key, val = (splitted_colon[0].strip(), splitted_colon[1].strip()) if len(splitted_colon) > 1 else ('', line_strip)
+        list_val = line_strip.split('- ', maxsplit = 1)[-1]
+        is_list_item = line_lstrip.startswith('- ')
+        is_comment = not line_strip or line_lstrip.startswith('#')
+        is_dedent = indent < indentprev
+        begin_multiline = val in ['>', '|', '|>']
+        is_record = len(list_val) >= 2 and list_val[0] == '{' and list_val[-1] == '}'
+
+        if is_multiline and begin_multiline_indent and indent < begin_multiline_indent:
+            is_multiline = False
+            begin_multiline_indent = 0
+
+        if not is_multiline:
+            if indent not in stack:
+                stack[indent] = (stack[indentprev][0][stack[indentprev][1]], keyprev) if keyprev is not None else ({None: dictprev}, None)
+            curdict, curkey = stack[indent]
+
+        if is_comment:
+            continue
+
+        elif is_list_item:
+            curdict[curkey] = curdict[curkey] or []
+            if not key or is_record:
+                curdict[curkey].append(procval(list_val))
+            else:
+                dictprev = {key.removeprefix('- ') : procval(val)}
+                curdict[curkey].append(dictprev)
+                key = None
+
+        elif begin_multiline:
+            curdict[curkey][key] = ''
+            curdict, curkey = curdict[curkey], key
+            is_multiline = True
+
+        elif is_multiline:
+            curdict[curkey] += ('\n' + val) if curdict[curkey] else val
+            begin_multiline_indent = min(indent, begin_multiline_indent) if begin_multiline_indent else indent
+
+        elif key and not val:
+            curdict[curkey][key] = dictprev = {}
+
+        else:
+            curdict[curkey][key] = procval(val)
+
+        if is_dedent:
+            stack = {i : v for i, v in stack.items() if i <= indent}
+
+        indentprev = indent
+        keyprev = key
+
+    return res
 
 class NanoJekyllTemplate:
     @staticmethod
@@ -212,10 +308,9 @@ class NanoJekyllContext:
     class TrimLeft(str): pass
     class TrimRight(str): pass
     
-    def __init__(self, ctx = None, metafunction = None):
+    def __init__(self, ctx = None):
         # https://shopify.github.io/liquid/basics/operators/
         self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllContext) else ctx
-        self.metafunction = metafunction
     
     def __or__(self, other):
         return NanoJekyllContext(other[0](self.ctx, *other[1:]))
@@ -321,7 +416,6 @@ class NanoJekyllContext:
         # https://shopify.github.io/liquid/filters/size/
         return len(xs) if xs else 0
     
-    
     @staticmethod
     def _date_to_xmlschema_(dt):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
@@ -426,20 +520,16 @@ class NanoJekyllContext:
         # https://shopify.github.io/liquid/filters/map/
         return [x[key] for x in xs] if xs else []
     
+    def _where_exp_(xs, key, value):
+        # https://jekyllrb.com/docs/liquid/filters/#where-expression
+        expr_test = eval(f'lambda {key}: {value}', dict(nil = None, false = False, true = True))
+        return [x for x in xs if expr_test(x)] if xs else []
+    
+    @staticmethod
+    def _smartify_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#smartify
+        return str(x)
 
-class NanoJekyllPluginFeedMeta(NanoJekyllTemplate):
-    # https://github.com/jekyll/jekyll-feed/blob/master/lib/jekyll-feed/feed.xml
-    template_code = '''
-<link type="application/atom+xml" rel="alternate" href='{{ site.feed.path | default: "feed.xml" }}' title="{{ site.title }}" />
-'''
-
-    #def __str__(self):
-    #    indent1, indent2 = ' ' * 4 * self.indent_level, ' ' * 4 * (1 + self.indent_level)
-    #    python_source = '\n'.join([
-    #        indent1 + 'def render_{template_name}(self):\n'.format(template_name = self.template_name),
-    #        indent2 + '''return '<link type="application/atom+xml" rel="alternate" href="{href}" title="{title}" />'.format(href = str(self._relative_url_("feed.xml")), title = str(self.page.title)) '''
-    #    ])
-    #    return python_source 
 
 class NanoJekyllPluginSeo(NanoJekyllTemplate):
     template_code = '''<!-- NanoJekyll and python does not support question-marks in variable names, so replacing here ? by _ -->
@@ -573,4 +663,128 @@ class NanoJekyllPluginSeo(NanoJekyllTemplate):
 </script>
 
 <!-- End Jekyll SEO tag -->
+'''
+
+class NanoJekyllPluginFeedMeta(NanoJekyllTemplate):
+    template_code = '''
+<link type="application/atom+xml" rel="alternate" href='{{ site.feed.path | default: "feed.xml" }}' title="{{ site.title }}" />
+'''
+    #def __str__(self): return ' ' * 4 * self.indent_level + 'def render_{template_name}(self):\n'.format(template_name = self.template_name) + self.template_code.replace('{{ site.feed.path | default: "feed.xml" }}', self._default_(str(self.site.feed.path), "feed.xml")).replace('{{ site.title }}', str(self.page.title))'''
+
+
+class NanoJekyllPluginFeedMetaXml(NanoJekyllTemplate):
+    # https://github.com/jekyll/jekyll-feed/blob/master/lib/jekyll-feed/feed.xml
+    template_code = '''
+<?xml version="1.0" encoding="utf-8"?>
+{% if page.xsl %}
+  <?xml-stylesheet type="text/xml" href="{{ '/feed.xslt.xml' | absolute_url }}"?>
+{% endif %}
+<feed xmlns="http://www.w3.org/2005/Atom" {% if site.lang %}xml:lang="{{ site.lang }}"{% endif %}>
+  <generator uri="https://jekyllrb.com/" version="{{ jekyll.version }}">Jekyll</generator>
+  <link href="{{ page.url | absolute_url }}" rel="self" type="application/atom+xml" />
+  <link href="{{ '/' | absolute_url }}" rel="alternate" type="text/html" {% if site.lang %}hreflang="{{ site.lang }}" {% endif %}/>
+  <updated>{{ site.time | date_to_xmlschema }}</updated>
+  <id>{{ page.url | absolute_url | xml_escape }}</id>
+
+  {% assign title = site.title | default: site.name %}
+  {% if page.collection != "posts" %}
+    {% assign collection = page.collection | capitalize %}
+    {% assign title = title | append: " | " | append: collection %}
+  {% endif %}
+  {% if page.category %}
+    {% assign category = page.category | capitalize %}
+    {% assign title = title | append: " | " | append: category %}
+  {% endif %}
+
+  {% if title %}
+    <title type="html">{{ title | smartify | xml_escape }}</title>
+  {% endif %}
+
+  {% if site.description %}
+    <subtitle>{{ site.description | xml_escape }}</subtitle>
+  {% endif %}
+
+  {% if site.author %}
+    <author>
+        <name>{{ site.author.name | default: site.author | xml_escape }}</name>
+      {% if site.author.email %}
+        <email>{{ site.author.email | xml_escape }}</email>
+      {% endif %}
+      {% if site.author.uri %}
+        <uri>{{ site.author.uri | xml_escape }}</uri>
+      {% endif %}
+    </author>
+  {% endif %}
+
+  {% if page.tags %}
+    {% assign posts = site.tags[page.tags] %}
+  {% else %}
+    {% assign posts = site[page.collection] %}
+  {% endif %}
+  {% if page.category %}
+    {% assign posts = posts | where: "categories", page.category %}
+  {% endif %}
+  {% unless site.show_drafts %}
+    {% assign posts = posts | where_exp: "post", "post.draft != true" %}
+  {% endunless %}
+  {% assign posts = posts | sort: "date" | reverse %}
+  {% assign posts_limit = site.feed.posts_limit | default: 10 %}
+  {% for post in posts limit: posts_limit %}
+    <entry{% if post.lang %}{{" "}}xml:lang="{{ post.lang }}"{% endif %}>
+      {% assign post_title = post.title | smartify | strip_html | normalize_whitespace | xml_escape %}
+
+      <title type="html">{{ post_title }}</title>
+      <link href="{{ post.url | absolute_url }}" rel="alternate" type="text/html" title="{{ post_title }}" />
+      <published>{{ post.date | date_to_xmlschema }}</published>
+      <updated>{{ post.last_modified_at | default: post.date | date_to_xmlschema }}</updated>
+      <id>{{ post.id | absolute_url | xml_escape }}</id>
+      {% assign excerpt_only = post.feed.excerpt_only | default: site.feed.excerpt_only %}
+      {% unless excerpt_only %}
+        <content type="html" xml:base="{{ post.url | absolute_url | xml_escape }}"><![CDATA[{{ post.content | strip }}]]></content>
+      {% endunless %}
+
+      {% assign post_author = post.author | default: post.authors[0] | default: site.author %}
+      {% assign post_author = site.data.authors[post_author] | default: post_author %}
+      {% assign post_author_email = post_author.email | default: nil %}
+      {% assign post_author_uri = post_author.uri | default: nil %}
+      {% assign post_author_name = post_author.name | default: post_author %}
+
+      <author>
+          <name>{{ post_author_name | default: "" | xml_escape }}</name>
+        {% if post_author_email %}
+          <email>{{ post_author_email | xml_escape }}</email>
+        {% endif %}
+        {% if post_author_uri %}
+          <uri>{{ post_author_uri | xml_escape }}</uri>
+        {% endif %}
+      </author>
+
+      {% if post.category %}
+        <category term="{{ post.category | xml_escape }}" />
+      {% elsif post.categories %}
+        {% for category in post.categories %}
+          <category term="{{ category | xml_escape }}" />
+        {% endfor %}
+      {% endif %}
+
+      {% for tag in post.tags %}
+        <category term="{{ tag | xml_escape }}" />
+      {% endfor %}
+
+      {% assign post_summary = post.description | default: post.excerpt %}
+      {% if post_summary and post_summary != empty %}
+        <summary type="html"><![CDATA[{{ post_summary | strip_html | normalize_whitespace }}]]></summary>
+      {% endif %}
+
+      {% assign post_image = post.image.path | default: post.image %}
+      {% if post_image %}
+        {% unless post_image contains "://" %}
+          {% assign post_image = post_image | absolute_url %}
+        {% endunless %}
+        <media:thumbnail xmlns:media="http://search.yahoo.com/mrss/" url="{{ post_image | xml_escape }}" />
+        <media:content medium="image" url="{{ post_image | xml_escape }}" xmlns:media="http://search.yahoo.com/mrss/" />
+      {% endif %}
+    </entry>
+  {% endfor %}
+</feed>
 '''
