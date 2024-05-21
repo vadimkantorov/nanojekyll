@@ -35,121 +35,31 @@ posts = {
     '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
 }
 
-platform_configs = {
-    "webmaster_verifications" : {
-        "google": "googleverif",
-        "bing" : "bingverif",
-        "alexa": "alexaverif",
-        "yandex": "yandexverif",
-        "baidu": "baiduverif",
-        "facebook": "facebookverif"
-    },
-    "facebook": {
-        "admins": "admins",
-        "publisher": "publisher",
-        "app_id": "app_id"
-    },
-    "twitter": {
-        "username": "username"
-    }
-}
-
 config = nanojekyll.yaml_loads(open(config_yml).read())
 
-ctx = dict(site = config | platform_configs, jekyll = dict(environment = "production"))
+ctx = dict(site = config, jekyll = dict(environment = "production"), paginator = {})
 
-ctx["site"].update({
-    "feed": {"path": "feed.xml", "excerpt_only": False},
+ctx["site"].update(dict(
+    feed = dict(path = "feed.xml", excerpt_only = False),
 
-    "header_pages": ["index.md", "about.md"],
+    time = "now",
+    lang = "en", 
+    show_drafts = False,
 
-
-    "time" : "now",
-    "lang" : "en", 
-    "show_drafts": False,
-
-    "paginate": True,
-
-    "url": "https://vadimkantorov.github.io",
-    "baseurl": "/nanojekyll",
+    url = "https://vadimkantorov.github.io",
+    baseurl = "/nanojekyll",
     
-    "related_posts": [],
-    "static_files": [],
-    "html_pages": [],
-    "html_files": [],
-    "collections": [],
-    "data": [],
-    "documents": [],
-    "categories": {},
-    "pages" : [{"path": "about.md",  "title" : "title", "url": "url", "date": "date"}],
-    "posts" : [{"path": "blogpost.md",  "title" : "title", "url": "url", "date": "date"}]
-})
-    
+    collections = [],
+    categories = {},
+    tags = {},
 
-ctx.update({
+    pages = [{"path": "about.md", "title" : "title", "url": "url", "date": "date"}],
+    posts = [{"path": "blogpost.md", "title" : "title", "url": "url", "date": "date"}],
+    header_pages = ["index.md", "about.md"]
+))
 
-    "paginator" : {
-        "previous_page_path" : "/previous/page/path", 
-        "next_page_path"     : "/next/page/path",
-        "page"               : 2,
-        "previous_page"      : 1,
-        "next_page"          : 3 
-    },
+#cts['site']['paginate'], ctx['paginator'] = True, dict(previous_page_path = '/.../', next_page_path = '/.../', page = 2, previous_page = 1, next_page = 3, posts = ctx['site']['posts'])
 
-    "page": {
-        "layout": "default",
-        "lang": "en",
-        "title": "title",
-        "list_title"   : "Archive",
-        "description"  : "page description",
-        #"category"     : "category",
-        "permalink"    : "permalink",
-        "draft"        : False,
-        "published"    : True,
-        "content"      : "page content",
-        "slug"          : "slug",
-        "categories"    : ["asd", "def"],
-        #"tags"          : ["qwe", "rty"],
-        "author"       : ["abc def", "ghi asd"],
-        "collection"    : "posts",
-        "date"          : "date",
-        "modified_date" : "modified date",
-        "path"          : "path",
-        "dir"           : "dir",
-        
-        "excerpt"       : "excerpt",
-        "url"           : "url", 
-        "id"            : "path",
-
-        "twitter"       : {"card":  "summary_large_image"},
-        "image"         : {"path" : "path", "height" : "0", "width" : "0", "alt" : ""},
-
-        "previous"      : None,
-        "next"          : None,
-        "type"          : "page"
-    },
-
-    "seo_tag": {
-        "canonical_url" : "/canonical/url/",
-        "page_locale" : "en_US",
-        "description" : "description",
-        "site_title" : "site title", 
-        "page_title" : "page title",
-        "title" : "page title",
-        "author" : {"name": "name"},
-    
-        "image" : {}, 
-        "json_ld": {
-            "@context" : "https://schema.org",
-            "@type" : "WebPage",
-            "description" : "description", 
-            "url": "canonical url", 
-            "headline" : "page title", 
-            "name": "site title", 
-            "author" : {"@type" : "Person", "name": "name", "url" : "url"} 
-        }
-    }
-})
 
 def read_template(path):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
@@ -157,7 +67,8 @@ def read_template(path):
         content = markdown.markdown(content)
     return frontmatter, content
 
-def render(cls, ctx = {}, content = '', template_name = '', templates = {}): # https://jekyllrb.com/docs/rendering-process/
+def render(cls, ctx = {}, content = '', template_name = '', templates = {}):
+    # https://jekyllrb.com/docs/rendering-process/
     while template_name:
         frontmatter, template = [l for k,l in templates.items() if k == template_name or os.path.splitext(k)[0] == template_name][0] 
         content = cls(ctx | dict(content = content)).render(template_name)
@@ -192,7 +103,6 @@ if output_path := ctx['site'].get('feed', {}).get('path', ''):
         f.write(content)
     print(output_path)
 
-
 os.makedirs(output_dir, exist_ok = True)
 print(output_dir)
 for input_path, output_path in static_assets.items():
@@ -202,9 +112,65 @@ for input_path, output_path in static_assets.items():
         content = g.read()
         f.write(content)
     print(output_path)
+
 for input_path, output_path in list(pages.items()) + list(dynamic_assets.items()) + list(posts.items()):
     output_path = os.path.join(output_dir, output_path or input_path)
     os.makedirs(os.path.dirname(output_path), exist_ok = True)
     with open(output_path, 'w') as f:
+        ctx['page'] = {
+            "layout": "default",
+            "lang": "en",
+            "title": "title",
+            "list_title"   : "Archive",
+            "description"  : "page description",
+            #"category"     : "category",
+            "permalink"    : "permalink",
+            "draft"        : False,
+            "published"    : True,
+            "content"      : "page content",
+            "slug"          : "slug",
+            "categories"    : ["asd", "def"],
+            #"tags"          : ["qwe", "rty"],
+            "author"       : ["abc def", "ghi asd"],
+            "collection"    : "posts",
+            "date"          : "date",
+            "modified_date" : "modified date",
+            "path"          : "path",
+            "dir"           : "dir",
+            
+            "excerpt"       : "excerpt",
+            "url"           : "url", 
+            "id"            : "path",
+
+            "twitter"       : {"card":  "summary_large_image"},
+            "image"         : {"path" : "path", "height" : "0", "width" : "0", "alt" : ""},
+
+            "previous"      : None,
+            "next"          : None,
+            "type"          : "page"
+        }
+
+
+        ctx["seo_tag"] = {
+            "canonical_url" : "/canonical/url/",
+            "page_locale" : "en_US",
+            "description" : "description",
+            "site_title" : "site title", 
+            "page_title" : "page title",
+            "title" : "page title",
+            "author" : {"name": "name"},
+        
+            "image" : {}, 
+            "json_ld": {
+                "@context" : "https://schema.org",
+                "@type" : "WebPage",
+                "description" : "description", 
+                "url": "canonical url", 
+                "headline" : "page title", 
+                "name": "site title", 
+                "author" : {"@type" : "Person", "name": "name", "url" : "url"} 
+            }
+        }
+        
         f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
     print(output_path)
