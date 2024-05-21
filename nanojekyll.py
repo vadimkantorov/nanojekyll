@@ -1,5 +1,5 @@
 # TODO: impl forloop.index
-# TODO: impl "contains" by using "in" and reversing expr
+# TODO: impl "contains" by using "in" and reversing expr and limit:
 
 import os, sys, re, html, json, datetime
 import inspect
@@ -60,6 +60,8 @@ def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = 
             begin_multiline_indent = 0
 
         if not is_multiline:
+            if is_list_item and indent in stack and isinstance(stack[indent][0][stack[indent][1]], dict):
+                indent += 2
             if indent not in stack:
                 stack[indent] = (stack[indentprev][0][stack[indentprev][1]], keyprev) if keyprev is not None else ({None: dictprev}, None)
             curdict, curkey = stack[indent]
@@ -70,7 +72,11 @@ def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = 
         elif is_list_item:
             curdict[curkey] = curdict[curkey] or []
             if not key or is_record:
-                curdict[curkey].append(procval(list_val))
+                try:
+                    curdict[curkey].append(procval(list_val))
+                except:
+                    breakpoint()
+                    print(123)
             else:
                 dictprev = {key.removeprefix('- ') : procval(val)}
                 curdict[curkey].append(dictprev)
@@ -101,7 +107,7 @@ def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = 
 
 class NanoJekyllTemplate:
     @staticmethod
-    def read_template(path, front_matter_sep = '---\n'):
+    def read_template(path, front_matter_sep = '---\n', parse_yaml = True):
         front_matter, template = '', ''
         with open(path) as f:
             line = f.readline()
@@ -113,7 +119,7 @@ class NanoJekyllTemplate:
             else:
                 template += line
             template += f.read()
-        return front_matter, template
+        return front_matter if not parse_yaml else yaml_loads(front_matter), template
 
     @staticmethod
     def codegen(templates, includes = {}, global_variables = [], plugins = {}, newline = '\n'):
