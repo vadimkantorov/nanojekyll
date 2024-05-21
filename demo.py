@@ -167,9 +167,9 @@ def read_template(path):
 
 def render(cls, ctx = {}, content = '', template_name = '', templates = {}): # https://jekyllrb.com/docs/rendering-process/
     while template_name:
-        frontmatter, template = [l for k, l in templates.items() if k == template_name or os.path.splitext(k)[0] == template_name][0] 
+        frontmatter, template = [l for k,l in templates.items() if k == template_name or os.path.splitext(k)[0] == template_name][0] 
         content = cls(ctx | dict(content = content)).render(template_name)
-        template_name = ([line.split(':')[1].strip() for line in frontmatter.splitlines() if line.strip().replace(' ', '').startswith('layout:')] or [None])[0]
+        template_name = frontmatter.get('layout')
     return content
 
 #####################################
