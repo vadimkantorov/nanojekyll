@@ -128,9 +128,15 @@ for input_path, output_path in list(pages.items()) + list(dynamic_assets.items()
             lang         = ctx['site'].get('lang', 'en'),
             locale       = ctx['site'].get('locale', 'en_US'),
             layout       = frontmatter.get('layout', 'default'),
+            path         = "path",
+            dir          = "dir",
 
             title        = "title",
             description  = "page description",
+            
+            date         = "date",
+            modified_date= "modified date",
+
             #"category"     = "category",
             permalink    = "permalink",
             draft        = False,
@@ -140,10 +146,6 @@ for input_path, output_path in list(pages.items()) + list(dynamic_assets.items()
             #"tags"          = ["qwe", "rty"],
             author       = ["abc def", "ghi asd"],
             collection   = "posts",
-            date         = "date",
-            modified_date= "modified date",
-            path         = "path",
-            dir          = "dir",
 
             twitter      = dict(card = 'summary_large_image'),
             image        = dict(path = 'path', height = '0', width = '0', alt = ''),
