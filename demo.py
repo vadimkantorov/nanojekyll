@@ -61,9 +61,9 @@ ctx["site"].update(dict(
 #cts['site']['paginate'], ctx['paginator'] = True, dict(previous_page_path = '/.../', next_page_path = '/.../', page = 2, previous_page = 1, next_page = 3, posts = ctx['site']['posts'])
 
 
-def read_template(path):
+def read_template(path, render = True):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
-    if path.endswith('.md'):
+    if path.endswith('.md') and render:
         content = markdown.markdown(content)
     return frontmatter, content
 
@@ -116,60 +116,60 @@ for input_path, output_path in static_assets.items():
 for input_path, output_path in list(pages.items()) + list(dynamic_assets.items()) + list(posts.items()):
     output_path = os.path.join(output_dir, output_path or input_path)
     os.makedirs(os.path.dirname(output_path), exist_ok = True)
+    frontmatter, content = read_template(input_path, render = False)[1]
     with open(output_path, 'w') as f:
-        ctx['page'] = {
-            "layout": "default",
-            "lang": "en",
-            "title": "title",
-            "list_title"   : "Archive",
-            "description"  : "page description",
-            #"category"     : "category",
-            "permalink"    : "permalink",
-            "draft"        : False,
-            "published"    : True,
-            "content"      : "page content",
-            "slug"          : "slug",
-            "categories"    : ["asd", "def"],
-            #"tags"          : ["qwe", "rty"],
-            "author"       : ["abc def", "ghi asd"],
-            "collection"    : "posts",
-            "date"          : "date",
-            "modified_date" : "modified date",
-            "path"          : "path",
-            "dir"           : "dir",
+        ctx['page'] = dict(
+            type         = "page",
+            list_title   = "Archive",
+            url          = os.path.basename(output_path), 
+            id           = input_path,
+            content      = content,
+            excerpt      = content[:500] + '...',
+            lang         = ctx['site'].get('lang', 'en'),
+            locale       = ctx['site'].get('locale', 'en_US'),
+            layout       = frontmatter.get('layout', 'default'),
+
+            title        = "title",
+            description  = "page description",
+            #"category"     = "category",
+            permalink    = "permalink",
+            draft        = False,
+            published    = True,
+            slug         = "slug",
+            categories   = ["asd", "def"],
+            #"tags"          = ["qwe", "rty"],
+            author       = ["abc def", "ghi asd"],
+            collection   = "posts",
+            date         = "date",
+            modified_date= "modified date",
+            path         = "path",
+            dir          = "dir",
+
+            twitter      = dict(card = 'summary_large_image'),
+            image        = dict(path = 'path', height = '0', width = '0', alt = ''),
+        )
+
+        ctx["seo_tag"] = dict(
+            page_locale    = ctx['page'].get('locale', '') or ctx['site'].get('locale', '') or 'en_US',
+            description    = ctx['page'].get('description', '') or ctx['site'].get('description', ''),
+            site_title     = ctx['site'].get('title', ''), 
+            page_title     = ctx['page'].get('title', ''),
+            title          = ctx['page'].get('title', '') or ctx['site'].get('title', ''),
             
-            "excerpt"       : "excerpt",
-            "url"           : "url", 
-            "id"            : "path",
+            author         = ctx['site'].get('author', {}),
+            image          = ctx['page']['image'],
+            
+            canonical_url  = os.path.join(ctx['site'].get('url', ''), ctx['site'].get('baseurl', '').lstrip('/' * bool(ctx['site'].get('url', ''))), ctx['page']['url']), # https://mademistakes.com/mastering-jekyll/site-url-baseurl/
+        )
 
-            "twitter"       : {"card":  "summary_large_image"},
-            "image"         : {"path" : "path", "height" : "0", "width" : "0", "alt" : ""},
-
-            "previous"      : None,
-            "next"          : None,
-            "type"          : "page"
-        }
-
-
-        ctx["seo_tag"] = {
-            "canonical_url" : "/canonical/url/",
-            "page_locale" : "en_US",
-            "description" : "description",
-            "site_title" : "site title", 
-            "page_title" : "page title",
-            "title" : "page title",
-            "author" : {"name": "name"},
-        
-            "image" : {}, 
-            "json_ld": {
-                "@context" : "https://schema.org",
-                "@type" : "WebPage",
-                "description" : "description", 
-                "url": "canonical url", 
-                "headline" : "page title", 
-                "name": "site title", 
-                "author" : {"@type" : "Person", "name": "name", "url" : "url"} 
-            }
+        ctx['seo_tag']['json_ld'] = {
+            "@context"     : "https://schema.org",
+            "@type"        : "WebPage",
+            "description"  : ctx['seo_tag']['description'],
+            "url"          : ctx['seo_tag']['canonical_url'],
+            "headline"     : ctx['seo_tag']['page_title'],
+            "name"         : ctx['seo_tag']['site_title'],
+            "author"       : {"@type" : "Person", "name": ctx['site'].get('author', {}).get('name', ''), "email" : ctx['site'].get('author', {}).get('email', '')}
         }
         
         f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
