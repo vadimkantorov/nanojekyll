@@ -116,7 +116,7 @@ for input_path, output_path in static_assets.items():
 for input_path, output_path in list(pages.items()) + list(dynamic_assets.items()) + list(posts.items()):
     output_path = os.path.join(output_dir, output_path or input_path)
     os.makedirs(os.path.dirname(output_path), exist_ok = True)
-    frontmatter, content = read_template(input_path, render = False)[1]
+    frontmatter, content = read_template(input_path, render = False)
     with open(output_path, 'w') as f:
         ctx['page'] = dict(
             type         = "page",
