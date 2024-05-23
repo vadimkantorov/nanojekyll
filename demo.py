@@ -49,21 +49,21 @@ pages = {
     'about.md' : 'about.html'
 }
 posts = {
-    '_posts/2016-05-19-super-short-article.md' : '2016-05-19-super-short-article.html', 
-    '_posts/2016-05-20-super-long-article.md' : '2016-05-20-super-long-article.html', 
-    '_posts/2016-05-20-welcome-to-jekyll.md' : '2016-05-20-welcome-to-jekyll.html', 
-    '_posts/2016-05-20-my-example-post.md' : '2016-05-20-my-example-post.html', 
+    '_posts/2016-05-19-super-short-article.md'                        : '2016-05-19-super-short-article.html', 
+    '_posts/2016-05-20-super-long-article.md'                         : '2016-05-20-super-long-article.html', 
+    '_posts/2016-05-20-welcome-to-jekyll.md'                          : '2016-05-20-welcome-to-jekyll.html', 
+    '_posts/2016-05-20-my-example-post.md'                            : '2016-05-20-my-example-post.html', 
     '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
 }
 #####################################
 
 config = nanojekyll.yaml_loads(open(config_yml).read())
 
-ctx = dict(site = config, jekyll = dict(environment = "production"), paginator = {})
+ctx = dict(site = config, jekyll = dict(environment = 'production'), paginator = {})
 ctx['site'].update(dict(
     url = siteurl,
     baseurl = baseurl,
-    feed = dict(path = "feed.xml", excerpt_only = False),
+    feed = dict(path = 'feed.xml', excerpt_only = False),
     time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
 ))
 
@@ -84,16 +84,10 @@ for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()
         layout       = 'default',
         description  = '',
         path         = input_path,
-        dir          = "dir",
+        dir          = 'dir',
 
-        title        = "title",
-        date         = "date",
-
-        #"category"     = "category",
-        categories   = ["asd", "def"],
-        #"tags"          = ["qwe", "rty"],
-        author       = ["abc def", "ghi asd"],
-        collection   = "posts",
+        title        = 'title',
+        date         = 'date',
 
         twitter      = dict(card = 'summary_large_image'),
         image        = dict(path = 'path', height = '0', width = '0', alt = ''),
@@ -113,13 +107,13 @@ for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()
     )
 
     ctx['page']['seo_tag']['json_ld'] = {
-        "@context"     : "https://schema.org",
-        "@type"        : "WebPage",
-        "description"  : ctx['page']['seo_tag']['description'],
-        "url"          : ctx['page']['seo_tag']['canonical_url'],
-        "headline"     : ctx['page']['seo_tag']['page_title'],
-        "name"         : ctx['page']['seo_tag']['site_title'],
-        "author"       : {"@type" : "Person", "name": ctx['site'].get('author', {}).get('name', ''), "email" : ctx['site'].get('author', {}).get('email', '')}
+        '@context'     : 'https://schema.org',
+        '@type'        : 'WebPage',
+        'description'  : ctx['page']['seo_tag']['description'],
+        'url'          : ctx['page']['seo_tag']['canonical_url'],
+        'headline'     : ctx['page']['seo_tag']['page_title'],
+        'name'         : ctx['page']['seo_tag']['site_title'],
+        'author'       : {'@type' : 'Person', 'name': ctx['site'].get('author', {}).get('name', ''), 'email' : ctx['site'].get('author', {}).get('email', '')}
     }
     assets_pages_posts[input_path] = ctx.pop('page')
 
@@ -161,19 +155,19 @@ for input_path, output_path in static_assets.items():
 for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()) + list(posts.items()):
     output_path = os.path.join(output_dir, output_path or input_path)
     os.makedirs(os.path.dirname(output_path), exist_ok = True)
-    frontmatter, content = read_template(input_path, render = False)
+    
     ctx['page'] = assets_pages_posts[input_path]
     ctx['seo_tag'] = ctx['page']['seo_tag']
     with open(output_path, 'w') as f:
         f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
     print(output_path)
 
-#if output_path := ctx['site'].get('feed', {}).get('path', ''):
-#    ctx['page'] = {}
-#    ctx['seo_tag'] = {}
-#    output_path = os.path.join(output_dir, output_path)
-#    os.makedirs(os.path.dirname(output_path), exist_ok = True)
-#    with open(output_path, 'w') as f:
-#        content = cls(ctx).render('feed_meta_xml', is_plugin = True)
-#        f.write(content)
-#    print(output_path)
+if output_path := ctx['site'].get('feed', {}).get('path', ''):
+    output_path = os.path.join(output_dir, output_path)
+    os.makedirs(os.path.dirname(output_path), exist_ok = True)
+    
+    ctx['page'] = dict(collection = 'posts', url = os.path.join(ctx['site'].get('url', ''), ctx['site'].get('baseurl', '').lstrip('/' * bool(ctx['site'].get('url', ''))), output_path))
+    with open(output_path, 'w') as f:
+        content = cls(ctx).render('feed_meta_xml', is_plugin = True)
+        f.write(content)
+    print(output_path)
