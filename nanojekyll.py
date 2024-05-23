@@ -149,7 +149,7 @@ class NanoJekyllTemplate:
         self.forloop_cnt = 0
         self.add_line(f'def render_{function_name}(self):')
         self.indent_level += 1
-        self.add_line('''nil, false, true, forloop, NanoJekyllResult = None, False, True, self.forloop, []''')
+        self.add_line('''nil, empty, false, true, forloop, NanoJekyllResult = None, None, False, True, self.forloop, []''')
 
         filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
         self.add_line((', '.join(k.removeprefix('_').removesuffix('_') for k in filters_names) or '()') + ' = ' + ((', '.join(f'self.pipify(self.{k})' for k in filters_names) or '()')))
