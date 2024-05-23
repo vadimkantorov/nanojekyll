@@ -1,5 +1,6 @@
 import os
 import json
+import argparse
 import markdown
 import datetime
 
@@ -85,95 +86,107 @@ def build_context(config, siteurl = '', baseurl = '', dynamic_assets = {}, pages
     ctx['site']['posts'] = [ctx['assets_pages_posts'][k] for k in posts.keys()]
     return ctx
 
+def main(
+    config_yml,
+    output_dir,
+    layouts_dir,
+    includes_dir,
+    icons_dir,
+    codegen_py,
+    siteurl,
+    baseurl,
+    includes_basenames,
+    icons_basenames,
+    layouts_basenames,
+    global_variables,
+    static_assets,
+    dynamic_assets,
+    pages,
+    posts
+):
+    static_assets = dict(a.split('=') for a in static_assets)
+    dynamic_assets = dict(a.split('=') for a in dynamic_assets)
+    pages = dict(a.split('=') for a in pages)
+    posts = dict(a.split('=') for a in posts)
+
+    #####################################
+
+    config = nanojekyll.yaml_loads(open(config_yml).read())
+    ctx = build_context(config, siteurl = siteurl, baseurl = baseurl, dynamic_assets = dynamic_assets, pages = pages, posts = posts)
+
+
+    icons = {os.path.join(os.path.basename(icons_dir), basename) : open(os.path.join(icons_dir, basename)).read() for basename in icons_basenames} 
+
+    templates_layouts = {os.path.splitext(basename)[0] : read_template(os.path.join(layouts_dir, basename)) for basename in layouts_basenames} 
+    templates_includes = {basename: read_template(os.path.join(includes_dir, basename)) for basename in includes_basenames}
+    templates_pages = {input_path: read_template(input_path) for input_path in pages}
+    templates_posts = {input_path: read_template(input_path) for input_path in posts}
+    templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
+
+    templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
+    cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml})
+    with open(codegen_py, 'w') as f:
+        f.write(python_source)
+    #cls = __import__('nanojekyllcodegen').NanoJekyllContext
+    print(codegen_py)
+
+    assert cls
+
+    os.makedirs(output_dir, exist_ok = True)
+    print(output_dir)
+
+    for input_path, output_path in static_assets.items():
+        output_path = os.path.join(output_dir, output_path or input_path)
+        os.makedirs(os.path.dirname(output_path), exist_ok = True)
+        with open(output_path, 'wb') as f, open(input_path, 'rb') as g:
+            content = g.read()
+            f.write(content)
+        print(output_path)
+
+    for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()) + list(posts.items()):
+        output_path = os.path.join(output_dir, output_path or input_path)
+        os.makedirs(os.path.dirname(output_path), exist_ok = True)
+        
+        ctx['page'] = ctx['assets_pages_posts'][input_path]
+        ctx['seo_tag'] = ctx['page']['seo_tag']
+        with open(output_path, 'w') as f:
+            f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
+        print(output_path)
+
+    if output_path := ctx['site'].get('feed', {}).get('path', ''):
+        output_path = os.path.join(output_dir, output_path)
+        os.makedirs(os.path.dirname(output_path), exist_ok = True)
+        
+        ctx['page'] = dict(collection = 'posts', url = os.path.join(ctx['site'].get('url', ''), ctx['site'].get('baseurl', '').lstrip('/' * bool(ctx['site'].get('url', ''))), output_path))
+        with open(output_path, 'w') as f:
+            content = cls(ctx).render('feed_meta_xml', is_plugin = True)
+            f.write(content)
+        print(output_path)
+    
 
 #####################################
 
-
-config_yml = '_config.yml'
-
-siteurl, baseurl = 'https://vadimkantorov.github.io', '/nanojekyll'
-
-#siteurl, baseurl = '.', ''
-
-global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll', 'seo_tag'] # https://jekyllrb.com/docs/variables/
-
-output_dir = '_site'
-layouts_dir = '_layouts'
-includes_dir = '_includes'
-icons_dir = '_includes/social-icons'
-codegen_py = 'nanojekyllcodegen.py'
-includes_basenames = ['footer.html', 'head.html', 'custom-head.html', 'social.html', 'social-item.html', 'svg_symbol.html', 'google-analytics.html',   'header.html', 'disqus_comments.html']
-icons_basenames = ['devto.svg', 'flickr.svg', 'google_scholar.svg', 'linkedin.svg', 'pinterest.svg', 'telegram.svg', 'youtube.svg', 'dribbble.svg', 'github.svg', 'instagram.svg', 'mastodon.svg', 'rss.svg', 'twitter.svg', 'facebook.svg', 'gitlab.svg', 'keybase.svg', 'microdotblog.svg', 'stackoverflow.svg', 'x.svg']
-layouts_basenames = ['base.html', 'page.html', 'post.html', 'home.html']
-static_assets = {
-    'assets/css/style.css' : 'assets/css/style.css'
-}
-dynamic_assets = {
-    'assets/minima-social-icons.liquid' : 'assets/minima-social-icons.svg'
-}
-pages = {
-    '404.html' : '404.html',
-    'index.md' : 'index.html', 
-    'about.md' : 'about.html'
-}
-posts = {
-    '_posts/2016-05-19-super-short-article.md'                        : '2016-05-19-super-short-article.html', 
-    '_posts/2016-05-20-super-long-article.md'                         : '2016-05-20-super-long-article.html', 
-    '_posts/2016-05-20-welcome-to-jekyll.md'                          : '2016-05-20-welcome-to-jekyll.html', 
-    '_posts/2016-05-20-my-example-post.md'                            : '2016-05-20-my-example-post.html', 
-    '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
-}
-
-#####################################
-
-config = nanojekyll.yaml_loads(open(config_yml).read())
-ctx = build_context(config, siteurl = siteurl, baseurl = baseurl, dynamic_assets = dynamic_assets, pages = pages, posts = posts)
-
-
-icons = {os.path.join(os.path.basename(icons_dir), basename) : open(os.path.join(icons_dir, basename)).read() for basename in icons_basenames} 
-
-templates_layouts = {os.path.splitext(basename)[0] : read_template(os.path.join(layouts_dir, basename)) for basename in layouts_basenames} 
-templates_includes = {basename: read_template(os.path.join(includes_dir, basename)) for basename in includes_basenames}
-templates_pages = {input_path: read_template(input_path) for input_path in pages}
-templates_posts = {input_path: read_template(input_path) for input_path in posts}
-templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
-
-templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
-cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml})
-with open(codegen_py, 'w') as f:
-    f.write(python_source)
-#cls = __import__('nanojekyllcodegen').NanoJekyllContext
-print(codegen_py)
-
-assert cls
-
-os.makedirs(output_dir, exist_ok = True)
-print(output_dir)
-
-for input_path, output_path in static_assets.items():
-    output_path = os.path.join(output_dir, output_path or input_path)
-    os.makedirs(os.path.dirname(output_path), exist_ok = True)
-    with open(output_path, 'wb') as f, open(input_path, 'rb') as g:
-        content = g.read()
-        f.write(content)
-    print(output_path)
-
-for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()) + list(posts.items()):
-    output_path = os.path.join(output_dir, output_path or input_path)
-    os.makedirs(os.path.dirname(output_path), exist_ok = True)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config-yml', default = '_config.yml')
+    parser.add_argument('--output-dir', default = '_site')
+    parser.add_argument('--layouts-dir', default = '_layouts')
+    parser.add_argument('--includes-dir', default = '_includes')
+    parser.add_argument('--icons-dir', default = '_includes/social-icons')
+    parser.add_argument('--codegen-py', default = 'nanojekyllcodegen.py')
+    parser.add_argument('--siteurl', default = '.')
+    parser.add_argument('--baseurl', default = '')
+    parser.add_argument('--includes-basenames', nargs = '*', default = ['footer.html', 'head.html', 'custom-head.html', 'social.html', 'social-item.html', 'svg_symbol.html', 'google-analytics.html',   'header.html', 'disqus_comments.html'])
+    parser.add_argument('--icons-basenames', nargs = '*', default = ['devto.svg', 'flickr.svg', 'google_scholar.svg', 'linkedin.svg', 'pinterest.svg', 'telegram.svg', 'youtube.svg', 'dribbble.svg', 'github.svg', 'instagram.svg', 'mastodon.svg', 'rss.svg', 'twitter.svg', 'facebook.svg', 'gitlab.svg', 'keybase.svg', 'microdotblog.svg', 'stackoverflow.svg', 'x.svg'])
+    parser.add_argument('--layouts-basenames', nargs = '*', default = ['base.html', 'page.html', 'post.html', 'home.html'])
+    parser.add_argument('--global-variables', nargs = '*', default = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll', 'seo_tag']) # https://jekyllrb.com/docs/variables/
     
-    ctx['page'] = ctx['assets_pages_posts'][input_path]
-    ctx['seo_tag'] = ctx['page']['seo_tag']
-    with open(output_path, 'w') as f:
-        f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
-    print(output_path)
-
-if output_path := ctx['site'].get('feed', {}).get('path', ''):
-    output_path = os.path.join(output_dir, output_path)
-    os.makedirs(os.path.dirname(output_path), exist_ok = True)
+    parser.add_argument('--static-assets', nargs = '*', default = ['assets/css/style.css=assets/css/style.css'])
+    parser.add_argument('--dynamic-assets', nargs = '*', default = ['assets/minima-social-icons.liquid=assets/minima-social-icons.svg'])
     
-    ctx['page'] = dict(collection = 'posts', url = os.path.join(ctx['site'].get('url', ''), ctx['site'].get('baseurl', '').lstrip('/' * bool(ctx['site'].get('url', ''))), output_path))
-    with open(output_path, 'w') as f:
-        content = cls(ctx).render('feed_meta_xml', is_plugin = True)
-        f.write(content)
-    print(output_path)
+    parser.add_argument('--pages', nargs = '*', default = ['404.html=404.html', 'index.md=index.html', 'about.md=about.html'])
+    parser.add_argument('--posts', nargs = '*', default = ['_posts/2016-05-19-super-short-article.md=2016-05-19-super-short-article.html', '_posts/2016-05-20-super-long-article.md=2016-05-20-super-long-article.html', '_posts/2016-05-20-welcome-to-jekyll.md=2016-05-20-welcome-to-jekyll.html', '_posts/2016-05-20-my-example-post.md=2016-05-20-my-example-post.html', '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md=2016-05-20-this-post-demonstrates-post-content-styles.html'])
+
+    args = parser.parse_args()
+
+    main(**vars(args))
