@@ -19,13 +19,81 @@ def render(cls, ctx = {}, content = '', template_name = '', templates = {}):
         template_name = frontmatter.get('layout')
     return content
 
+def get_page_date(page_path, date_template = '0000-00-00'):
+    page_name = os.path.basename(page_path)
+    if len(page_name) >= len(date_template) and page_name[:4].isdigit() and page_name[5:7].isdigit() and page_name[8:10].isdigit() and page_name[4] == page_name[7] == '-':
+        return page_name[:len(date_template)]
+    return ''
+
+def build_context(config, siteurl = '', baseurl = '', dynamic_assets = {}, pages = {}, posts = {}):
+    
+    ctx = dict(site = config, jekyll = dict(environment = 'production'), paginator = {})
+    ctx['site'].update(dict(
+        url = siteurl,
+        baseurl = baseurl,
+        feed = dict(path = 'feed.xml', excerpt_only = False),
+        time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        header_pages = ctx['site'].get('header_pages', []) or [k for k in pages if not k.startswith('404.') and not k.startswith('index.')]
+    ))
+
+    ctx['assets_pages_posts'] = {}
+    for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()) + list(posts.items()):
+        frontmatter, content = read_template(input_path, render = False)
+        content_lines = content.strip().splitlines()
+        title_from_id = os.path.splitext(os.path.basename(input_path))[0].removeprefix(get_page_date(input_path)).strip('-').strip('_').replace('-', ' ').replace('_', ' ').title()
+        title_from_content = content_lines[0].removeprefix('### ').removeprefix('## ').removeprefix('# ').strip() if content_lines and (content_lines[0].startswith('### ') or content_lines[0].startswith('## ') or content_lines[0].startswith('# ')) else ''
+        
+        ctx['page'] = dict(
+            type         = 'page' if input_path in pages else 'post' if input_path in posts else 'asset',
+            url          = os.path.basename(output_path), 
+            id           = input_path,
+            content      = content,
+            excerpt      = content[:500] + '...',
+            lang         = ctx['site'].get('lang', 'en'),
+            locale       = ctx['site'].get('locale', 'en_US'),
+            layout       = 'default',
+            description  = '',
+            path         = input_path,
+            title        = title_from_content or title_from_id,
+            date         = get_page_date(input_path),
+            twitter      = dict(card = 'summary_large_image'),
+            image        = dict(path = 'path', height = '0', width = '0', alt = ''),
+        ) | frontmatter
+
+        ctx['page']['seo_tag'] = dict(
+            page_locale    = ctx['page'].get('locale', '') or ctx['site'].get('locale', '') or 'en_US',
+            description    = ctx['page'].get('description', '') or ctx['site'].get('description', ''),
+            site_title     = ctx['site'].get('title', ''), 
+            page_title     = ctx['page'].get('title', ''),
+            title          = ctx['page'].get('title', '') or ctx['site'].get('title', ''),
+            author         = ctx['site'].get('author', {}),
+            image          = ctx['page']['image'],
+            canonical_url  = os.path.join(ctx['site'].get('url', ''), ctx['site'].get('baseurl', '').lstrip('/' * bool(ctx['site'].get('url', ''))), ctx['page']['url']), # https://mademistakes.com/mastering-jekyll/site-url-baseurl/
+        )
+
+        ctx['page']['seo_tag']['json_ld'] = {
+            '@context'     : 'https://schema.org',
+            '@type'        : 'WebPage',
+            'description'  : ctx['page']['seo_tag']['description'],
+            'url'          : ctx['page']['seo_tag']['canonical_url'],
+            'headline'     : ctx['page']['seo_tag']['page_title'],
+            'name'         : ctx['page']['seo_tag']['site_title'],
+            'author'       : {'@type' : 'Person', 'name': ctx['site'].get('author', {}).get('name', ''), 'email' : ctx['site'].get('author', {}).get('email', '')}
+        }
+        ctx['assets_pages_posts'][input_path] = ctx.pop('page')
+    ctx['site']['pages'] = [ctx['assets_pages_posts'][k] for k in pages.keys()]
+    ctx['site']['posts'] = [ctx['assets_pages_posts'][k] for k in posts.keys()]
+    return ctx
+
+
 #####################################
 
 
 config_yml = '_config.yml'
 
-siteurl = 'https://vadimkantorov.github.io'
-baseurl = '/nanojekyll'
+siteurl, baseurl = 'https://vadimkantorov.github.io', '/nanojekyll'
+
+#siteurl, baseurl = '.', ''
 
 global_variables = ['site', 'page', 'layout', 'theme', 'content', 'paginator', 'jekyll', 'seo_tag'] # https://jekyllrb.com/docs/variables/
 
@@ -55,73 +123,11 @@ posts = {
     '_posts/2016-05-20-my-example-post.md'                            : '2016-05-20-my-example-post.html', 
     '_posts/2016-05-20-this-post-demonstrates-post-content-styles.md' : '2016-05-20-this-post-demonstrates-post-content-styles.html'
 }
+
 #####################################
 
 config = nanojekyll.yaml_loads(open(config_yml).read())
-
-ctx = dict(site = config, jekyll = dict(environment = 'production'), paginator = {})
-ctx['site'].update(dict(
-    url = siteurl,
-    baseurl = baseurl,
-    feed = dict(path = 'feed.xml', excerpt_only = False),
-    time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-))
-
-#cts['site']['paginate'], ctx['paginator'] = True, dict(previous_page_path = '/.../', next_page_path = '/.../', page = 2, previous_page = 1, next_page = 3, posts = ctx['site']['posts'])
-
-assets_pages_posts = {}
-for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()) + list(posts.items()):
-    frontmatter, content = read_template(input_path, render = False)
-    ctx['page'] = dict(
-        type         = 'page' if input_path in pages else 'post' if input_path in posts else 'asset',
-        list_title   = 'Archive',
-        url          = os.path.basename(output_path), 
-        id           = input_path,
-        content      = content,
-        excerpt      = content[:500] + '...',
-        lang         = ctx['site'].get('lang', 'en'),
-        locale       = ctx['site'].get('locale', 'en_US'),
-        layout       = 'default',
-        description  = '',
-        path         = input_path,
-        dir          = 'dir',
-
-        title        = 'title',
-        date         = 'date',
-
-        twitter      = dict(card = 'summary_large_image'),
-        image        = dict(path = 'path', height = '0', width = '0', alt = ''),
-    ) | frontmatter
-
-    ctx['page']['seo_tag'] = dict(
-        page_locale    = ctx['page'].get('locale', '') or ctx['site'].get('locale', '') or 'en_US',
-        description    = ctx['page'].get('description', '') or ctx['site'].get('description', ''),
-        site_title     = ctx['site'].get('title', ''), 
-        page_title     = ctx['page'].get('title', ''),
-        title          = ctx['page'].get('title', '') or ctx['site'].get('title', ''),
-        
-        author         = ctx['site'].get('author', {}),
-        image          = ctx['page']['image'],
-        
-        canonical_url  = os.path.join(ctx['site'].get('url', ''), ctx['site'].get('baseurl', '').lstrip('/' * bool(ctx['site'].get('url', ''))), ctx['page']['url']), # https://mademistakes.com/mastering-jekyll/site-url-baseurl/
-    )
-
-    ctx['page']['seo_tag']['json_ld'] = {
-        '@context'     : 'https://schema.org',
-        '@type'        : 'WebPage',
-        'description'  : ctx['page']['seo_tag']['description'],
-        'url'          : ctx['page']['seo_tag']['canonical_url'],
-        'headline'     : ctx['page']['seo_tag']['page_title'],
-        'name'         : ctx['page']['seo_tag']['site_title'],
-        'author'       : {'@type' : 'Person', 'name': ctx['site'].get('author', {}).get('name', ''), 'email' : ctx['site'].get('author', {}).get('email', '')}
-    }
-    assets_pages_posts[input_path] = ctx.pop('page')
-
-ctx['pages'] = [assets_pages_posts[k] for k in pages.keys()]
-ctx['posts'] = [assets_pages_posts[k] for k in posts.keys()]
-
-
-#####################################
+ctx = build_context(config, siteurl = siteurl, baseurl = baseurl, dynamic_assets = dynamic_assets, pages = pages, posts = posts)
 
 
 icons = {os.path.join(os.path.basename(icons_dir), basename) : open(os.path.join(icons_dir, basename)).read() for basename in icons_basenames} 
@@ -156,7 +162,7 @@ for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()
     output_path = os.path.join(output_dir, output_path or input_path)
     os.makedirs(os.path.dirname(output_path), exist_ok = True)
     
-    ctx['page'] = assets_pages_posts[input_path]
+    ctx['page'] = ctx['assets_pages_posts'][input_path]
     ctx['seo_tag'] = ctx['page']['seo_tag']
     with open(output_path, 'w') as f:
         f.write(render(cls, ctx, template_name = input_path, templates = templates_all))
