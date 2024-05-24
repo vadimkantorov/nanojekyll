@@ -27,7 +27,6 @@ def get_page_date(page_path, date_template = '0000-00-00'):
     return ''
 
 def build_context(config, siteurl = '', baseurl = '', dynamic_assets = {}, pages = {}, posts = {}):
-    
     ctx = dict(site = config, jekyll = dict(environment = 'production'), paginator = {})
     ctx['site'].update(dict(
         url = siteurl,
@@ -115,7 +114,7 @@ def main(
     ctx = build_context(config, siteurl = siteurl, baseurl = baseurl, dynamic_assets = dynamic_assets, pages = pages, posts = posts)
 
 
-    icons = {os.path.join(os.path.basename(icons_dir), basename) : open(os.path.join(icons_dir, basename)).read() for basename in icons_basenames} 
+    icons = {os.path.join(os.path.basename(icons_dir), basename) : ({}, open(os.path.join(icons_dir, basename)).read()) for basename in icons_basenames} 
 
     templates_layouts = {os.path.splitext(basename)[0] : read_template(os.path.join(layouts_dir, basename)) for basename in layouts_basenames} 
     templates_includes = {basename: read_template(os.path.join(includes_dir, basename)) for basename in includes_basenames}
