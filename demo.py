@@ -6,10 +6,12 @@ import datetime
 
 import nanojekyll
 
+markdown_extensions = ['meta', 'tables', 'toc']
+
 def read_template(path, render = True):
     frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
     if path.endswith('.md') and render:
-        content = markdown.markdown(content)
+        content = markdown.markdown(content, extensions = markdown_extensions)
     return frontmatter, content
 
 def render(cls, ctx = {}, content = '', template_name = '', templates = {}):
