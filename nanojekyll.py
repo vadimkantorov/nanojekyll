@@ -45,8 +45,8 @@ def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = 
         indent = len(line) - len(line_lstrip)
         splitted_colon = line.split(':', maxsplit = 1)
         key, val = (splitted_colon[0].strip(), splitted_colon[1].strip()) if len(splitted_colon) > 1 else ('', line_strip)
-        list_val = line_strip.split('- ', maxsplit = 1)[-1]
-        is_list_item = line_lstrip.startswith('- ')
+        is_list_item = line_lstrip.startswith('- ') or line_lstrip.rstrip() == '-'
+        list_val = line_strip.split('-', maxsplit = 1)[-1].lstrip() if is_list_item else ''
         is_comment = not line_strip or line_lstrip.startswith('#')
         is_dedent = indent < indentprev
         begin_multiline = val in ['>', '|', '|>']
@@ -68,10 +68,10 @@ def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = 
 
         elif is_list_item:
             curdict[curkey] = curdict[curkey] or []
-            if not key or is_record:
+            if list_val and (not key) or is_record:
                 curdict[curkey].append(procval(list_val))
             else:
-                dictprev = {key.removeprefix('- ') : procval(val)}
+                dictprev = {key.removeprefix('- ') : procval(list_val)} if list_val else {}
                 curdict[curkey].append(dictprev)
                 key = None
 
