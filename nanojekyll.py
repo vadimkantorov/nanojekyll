@@ -413,7 +413,7 @@ class NanoJekyllContext:
     
     @staticmethod
     def sanitize_template_name(template_name):
-        return os.path.splitext(template_name)[0].translate({ord('/') : '_', ord('-'): '_', ord('.') : '_'})
+        return os.path.splitext(os.path.basename(template_name))[0].translate({ord('/') : '_', ord('-'): '_', ord('.') : '_'})
 
     def render(self, template_name, is_plugin = False):
         fn = getattr(self, ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name), None)

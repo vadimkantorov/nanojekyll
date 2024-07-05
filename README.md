@@ -17,6 +17,4 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 - https://github.com/aosabook/500lines/tree/master/template-engine
 - https://shuhari.dev/blog/2020/05/500lines-rewrite-template-engine
 - https://github.com/shuhari/500lines-rewrite/tree/master/template_engine
-
-
-
+- https://gist.github.com/JJediny/a466eed62cee30ad45e2
