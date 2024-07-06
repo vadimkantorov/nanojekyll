@@ -20,7 +20,7 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 - `capitalize`
     - `ceil`
     - `compact`
-    - `concat`
+- `concat`
     - `date`
 - `default`
     - `divided_by`
@@ -64,7 +64,18 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 - `where`
 
 # Supported [Jekyll filters](https://jekyllrb.com/docs/liquid/filters/)
-TODO
+- `date_to_xmlschema`
+- `relative_url`
+- `absolute_url`
+- `jsonify`
+- `xml_escape`
+- `pop`
+- `push`
+- `unshift`
+- `shift`
+- `normalize_whitespace`
+- `where_exp`
+- `smartify`
 
 # References
 - https://aosabook.org/en/500L/a-template-engine.html

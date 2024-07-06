@@ -520,6 +520,11 @@ class NanoJekyllContext:
         return xs.split(sep) if xs and sep in xs else []
 
     @staticmethod
+    def _concat_(xs, ys = []):
+        # https://shopify.github.io/liquid/filters/concat/
+        return (list(xs) if xs else []) + list(ys)
+    
+    @staticmethod
     def _slice_(xs, begin, cnt = 1):
         # https://shopify.github.io/liquid/filters/slice/
         assert int(begin) >= 0
