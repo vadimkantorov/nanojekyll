@@ -483,6 +483,11 @@ class NanoJekyllContext:
         return ('.' + url) if url.startswith('/') else url
     
     @staticmethod
+    def _to_integer_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#to-integer
+        return int(x)
+
+    @staticmethod
     def _jsonify_(x):
         # https://jekyllrb.com/docs/liquid/filters/#data-to-json
         return json.dumps(x, ensure_ascii = False) if x else '{}'
