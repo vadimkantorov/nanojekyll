@@ -13,58 +13,55 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 > When deploying to GitHub Pages, do not forget to set `GitHub Actions` as GitHub Pages source in your repo [`Settings -> Pages -> Build and deployment -> Source`](https://github.com/vadimkantorov/nanojekyll/settings/pages). Also do not forget to configure or disable branch protection rule (`No restriction`) in [`Settings -> Environments -> github-pages -> Deployment branches and tags`](https://github.com/vadimkantorov/nanojekyll/settings/environments/).
 
 # Supported Liquid filters
-* `abs`
 - `append`
+    - `abs`
     - `at_least`
-* `at_most`
+    - `at_most`
 - `capitalize`
-* `ceil`
-* `compact`
-* `concat`
-* `date`
+    - `ceil`
+    - `compact`
+    - `concat`
+    - `date`
 - `default`
-* `divided_by`
+    - `divided_by`
 - `downcase`
 - `escape`
-* `escape_once`
+    - `escape_once`
 - `first`
-* `floor`
+    - `floor`
 - `join`
 - `last`
-* `lstrip`
+    - `lstrip`
 - `map`
 - `minus`
-* `modulo`
-* `newline_to_br`
+    - `modulo`
+    - `newline_to_br`
 - `plus`
-* `prepend`
+    - `prepend`
 - `remove`
-* `remove_first`
-* `replace`
+    - `remove_first`
+    - `replace`
 * `replace_first`
 - `reverse`
-* `round`
-* `rstrip`
+    - `round`
+    - `rstrip`
 - `size`
 - `slice`
 - `sort`
-* `sort_natural`
+    - `sort_natural`
 - `split`
 - `strip`
 - `strip_html`
-* `strip_newlines`
-* `sum`
-* `times`
-* `truncate`
-* `truncatewords`
-* `uniq`
+    - `strip_newlines`
+    - `sum`
+    - `times`
+    - `truncate`
+    - `truncatewords`
+    - `uniq`
 - `upcase`
-* `url_decode`
-* `url_encode`
+    - `url_decode`
+    - `url_encode`
 - `where`
-
-# Not Supported Liquid filters
-
 
 # References
 - https://aosabook.org/en/500L/a-template-engine.html
