@@ -12,7 +12,7 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 > [!NOTE]
 > When deploying to GitHub Pages, do not forget to set `GitHub Actions` as GitHub Pages source in your repo [`Settings -> Pages -> Build and deployment -> Source`](https://github.com/vadimkantorov/nanojekyll/settings/pages). Also do not forget to configure or disable branch protection rule (`No restriction`) in [`Settings -> Environments -> github-pages -> Deployment branches and tags`](https://github.com/vadimkantorov/nanojekyll/settings/environments/).
 
-# Supported Liquid filters
+# Supported [Liquid filters](https://shopify.github.io/liquid/filters/)
 - `append`
     - `abs`
     - `at_least`
