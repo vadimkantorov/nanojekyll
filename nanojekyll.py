@@ -556,6 +556,11 @@ class NanoJekyllContext:
         return (xs if xs else 0) - sep
 
     @staticmethod
+    def _plus_(xs, sep = 0):
+        # https://shopify.github.io/liquid/filters/minus/
+        return (xs if xs else 0) + sep
+
+    @staticmethod
     def _remove_(x, y):
         # https://shopify.github.io/liquid/filters/remove/
         return x.replace(y, '') if x else ''
@@ -564,6 +569,16 @@ class NanoJekyllContext:
     def _strip_(x):
         # https://shopify.github.io/liquid/filters/strip/
         return str(x).strip() if x else ''
+    
+    @staticmethod
+    def _lstrip_(x):
+        # https://shopify.github.io/liquid/filters/lstrip/
+        return str(x).lstrip() if x else ''
+
+    @staticmethod
+    def _rstrip_(x):
+        # https://shopify.github.io/liquid/filters/rstrip/
+        return str(x).rstrip() if x else ''
 
     @staticmethod
     def _normalize_whitespace_(x):

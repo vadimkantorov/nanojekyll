@@ -31,7 +31,7 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
     - `floor`
 - `join`
 - `last`
-    - `lstrip`
+- `lstrip`
 - `map`
 - `minus`
     - `modulo`
@@ -41,10 +41,10 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 - `remove`
     - `remove_first`
     - `replace`
-* `replace_first`
+    - `replace_first`
 - `reverse`
     - `round`
-    - `rstrip`
+- `rstrip`
 - `size`
 - `slice`
 - `sort`
