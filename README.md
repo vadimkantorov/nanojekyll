@@ -63,6 +63,9 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
     - `url_encode`
 - `where`
 
+# Supported [Jekyll filters](https://jekyllrb.com/docs/liquid/filters/)
+TODO
+
 # References
 - https://aosabook.org/en/500L/a-template-engine.html
 - https://github.com/aosabook/500lines/tree/master/template-engine
