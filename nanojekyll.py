@@ -184,6 +184,9 @@ class NanoJekyllTemplate:
                     tokens_i_end = tokens[i].replace(' ', '').replace('comment', 'endcomment')
                     while tokens[i].replace(' ', '') != tokens_i_end:
                         i += 1
+                
+                elif words[0] == 'cycle':
+                    self.add_line('# ' + ' '.join(words))
     
                 elif words[0] == 'highlight':
                     lang = ''.join(words[1:])
@@ -286,7 +289,7 @@ class NanoJekyllTemplate:
         self.add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
     
     def _expr_code(self, expr):
-        is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"')) or (expr.startswith("'") and expr.endswith("'"))
+        is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"') and expr[1:-1].count('"') == 0) or (expr.startswith("'") and expr.endswith("'") and expr[1:-1].count("'") == 0)
         expr = expr.strip()
 
         if is_string_literal(expr):
@@ -354,7 +357,7 @@ class NanoJekyllContext:
 
     def __lt__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
-        return self.ctx < other
+        return (self.ctx < other) if self.ctx and other else True if self.ctx else False
 
     def __le__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
@@ -503,6 +506,47 @@ class NanoJekyllContext:
         return sep.join(str(x) for x in xs) if xs else ''
 
     @staticmethod
+    def _split_(xs, sep = ''):
+        # https://shopify.github.io/liquid/filters/split/
+        return xs.split(sep) if xs and sep in xs else []
+
+    @staticmethod
+    def _slice_(xs, begin, cnt = 1):
+        # https://shopify.github.io/liquid/filters/slice/
+        assert int(begin) >= 0
+        if not xs:
+            return xs
+        if int(begin) >= 0:
+            return xs[int(begin):(int(begin) + int(cnt))]
+        else:
+            return xs[int(begin) - int(cnt) : (int(begin) + 1 if int(begin) != -1 else None)]
+    
+    @staticmethod
+    def _unshift_(xs, elem):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return [elem] + xs
+    
+    @staticmethod
+    def _push_(xs, elem):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return xs + [elem]
+    
+    @staticmethod
+    def _pop_(xs):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return xs[0]
+    
+    @staticmethod
+    def _shift_(xs):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return xs[-1]
+
+    @staticmethod
+    def _minus_(xs, sep = 0):
+        # https://shopify.github.io/liquid/filters/minus/
+        return (xs if xs else 0) - sep
+
+    @staticmethod
     def _remove_(x, y):
         # https://shopify.github.io/liquid/filters/remove/
         return x.replace(y, '') if x else ''
@@ -558,6 +602,16 @@ class NanoJekyllContext:
     def _smartify_(x):
         # https://jekyllrb.com/docs/liquid/filters/#smartify
         return str(x) if x else ''
+
+    @staticmethod
+    def _downcase_(x):
+        # https://shopify.github.io/liquid/filters/downcase/
+        return str(x).lower() if x else ''
+    
+    @staticmethod
+    def _upcase_(x):
+        # https://shopify.github.io/liquid/filters/upcase/
+        return str(x).upper() if x else ''
 
 
 class NanoJekyllPluginSeo(NanoJekyllTemplate):
