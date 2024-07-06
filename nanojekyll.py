@@ -380,7 +380,7 @@ class NanoJekyllContext:
     def __getitem__(self, other):
         if not self.ctx:
             return NanoJekyllContext(None)
-        if isinstance(self.ctx, (list, str)):
+        if isinstance(self.ctx, (list, tuple, str)):
             return NanoJekyllContext(self.ctx[int(other)])
         if isinstance(self.ctx, dict):
             return NanoJekyllContext(self.ctx.get(str(other)))
@@ -428,6 +428,10 @@ class NanoJekyllContext:
         return NanoJekyllContext(self._first_(self))
     
     @property
+    def last(self):
+        return NanoJekyllContext(self._last_(self))
+    
+    @property
     def size(self):
         return NanoJekyllContext(self._size_(self))
     
@@ -438,6 +442,11 @@ class NanoJekyllContext:
     def _first_(xs):
         # https://shopify.github.io/liquid/filters/first/
         return xs[0] if xs else None
+    
+    @staticmethod
+    def _last_(xs):
+        # https://shopify.github.io/liquid/filters/last/
+        return xs[-1] if xs else None
 
     @staticmethod
     def _size_(xs):
@@ -524,22 +533,22 @@ class NanoJekyllContext:
     @staticmethod
     def _unshift_(xs, elem):
         # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return [elem] + xs
+        return [elem] + (xs or [])
     
     @staticmethod
     def _push_(xs, elem):
         # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return xs + [elem]
+        return (xs or []) + [elem]
     
     @staticmethod
     def _pop_(xs):
         # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return xs[0]
+        return xs[:-1] if xs else []
     
     @staticmethod
     def _shift_(xs):
         # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return xs[-1]
+        return xs[1:] if xs else []
 
     @staticmethod
     def _minus_(xs, sep = 0):
