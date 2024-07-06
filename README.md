@@ -13,6 +13,8 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 > When deploying to GitHub Pages, do not forget to set `GitHub Actions` as GitHub Pages source in your repo [`Settings -> Pages -> Build and deployment -> Source`](https://github.com/vadimkantorov/nanojekyll/settings/pages). Also do not forget to configure or disable branch protection rule (`No restriction`) in [`Settings -> Environments -> github-pages -> Deployment branches and tags`](https://github.com/vadimkantorov/nanojekyll/settings/environments/).
 
 # Supported [Liquid filters](https://shopify.github.io/liquid/filters/)
+TODO: fix lt/gt wrt None
+
 - `append`
     - `abs`
     - `at_least`
@@ -64,18 +66,38 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 - `where`
 
 # Supported [Jekyll filters](https://jekyllrb.com/docs/liquid/filters/)
-- `date_to_xmlschema`
 - `relative_url`
 - `absolute_url`
-- `jsonify`
-- `xml_escape`
-- `pop`
-- `push`
-- `unshift`
-- `shift`
-- `normalize_whitespace`
+- `date_to_xmlschema`
+    - `date_to_rfc822`
+    - `date_to_string`
+    - `date_to_long_string`
 - `where_exp`
+    - `find`
+    - `find_exp`
+    - `group_by`
+    - `group_by_exp`
+- `xml_escape`
+    - `cgi_escape`
+    - `uri_escape`
+    - `number_of_words`
+    - `array_to_sentence_string`
+    - `markdownify`
 - `smartify`
+    - `sassify`
+    - `scssify`
+    - `slugify`
+- `jsonify`
+- `normalize_whitespace`
+- `sort`
+- `sample`
+- `to_integer`
+- `push`
+- `pop`
+- `shift`
+- `unshift`
+    - `inspect`
+
 
 # References
 - https://aosabook.org/en/500L/a-template-engine.html
