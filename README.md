@@ -12,6 +12,60 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 > [!NOTE]
 > When deploying to GitHub Pages, do not forget to set `GitHub Actions` as GitHub Pages source in your repo [`Settings -> Pages -> Build and deployment -> Source`](https://github.com/vadimkantorov/nanojekyll/settings/pages). Also do not forget to configure or disable branch protection rule (`No restriction`) in [`Settings -> Environments -> github-pages -> Deployment branches and tags`](https://github.com/vadimkantorov/nanojekyll/settings/environments/).
 
+# Supported Liquid filters
+    * `abs`
+- `append`
+* `at_least`
+* `at_most`
+- `capitalize`
+* `ceil`
+* `compact`
+* `concat`
+* `date`
+- `default`
+* `divided_by`
+- `downcase`
+- `escape`
+* `escape_once`
+- `first`
+* `floor`
+- `join`
+- `last`
+* `lstrip`
+- `map`
+- `minus`
+* `modulo`
+* `newline_to_br`
+- `plus`
+* `prepend`
+- `remove`
+* `remove_first`
+* `replace`
+* `replace_first`
+- `reverse`
+* `round`
+* `rstrip`
+- `size`
+- `slice`
+- `sort`
+* `sort_natural`
+- `split`
+- `strip`
+- `strip_html`
+* `strip_newlines`
+* `sum`
+* `times`
+* `truncate`
+* `truncatewords`
+* `uniq`
+- `upcase`
+* `url_decode`
+* `url_encode`
+- `where`
+
+# Not Supported Liquid filters
+
+
 # References
 - https://aosabook.org/en/500L/a-template-engine.html
 - https://github.com/aosabook/500lines/tree/master/template-engine
