@@ -16,11 +16,11 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 TODO: fix lt/gt wrt None
 
 - `append`
-    - `abs`
+- `abs`
     - `at_least`
     - `at_most`
 - `capitalize`
-    - `ceil`
+- `ceil`
     - `compact`
 - `concat`
     - `date`
@@ -30,7 +30,7 @@ TODO: fix lt/gt wrt None
 - `escape`
     - `escape_once`
 - `first`
-    - `floor`
+- `floor`
 - `join`
 - `last`
 - `lstrip`
@@ -45,7 +45,7 @@ TODO: fix lt/gt wrt None
     - `replace`
     - `replace_first`
 - `reverse`
-    - `round`
+- `round`
 - `rstrip`
 - `size`
 - `slice`

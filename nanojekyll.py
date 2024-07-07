@@ -1,4 +1,4 @@
-import os, sys, re, html, json, datetime
+import os, sys, re, html, json, math, datetime
 import inspect
 
 def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
@@ -118,7 +118,7 @@ class NanoJekyllTemplate:
     def codegen(templates, includes = {}, global_variables = [], plugins = {}, newline = '\n'):
         indent_level = 1
 
-        python_source  = 'import os, sys, re, html, json, datetime' + newline
+        python_source  = 'import os, sys, re, html, json, math, datetime' + newline
         python_source += inspect.getsource(NanoJekyllContext) + newline
         python_source += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + newline
         python_source += newline.join(str(NanoJekyllTemplate(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins))) for template_name, template_code in templates.items()) + newline
@@ -347,6 +347,18 @@ class NanoJekyllContext:
     def __int__(self):
         return int(self.ctx)
 
+    def __abs__(self):
+        return abs(self.ctx) if isinstance(self.ctx, int | float) else 0 if (not self.ctx or not isinstance(self.ctx, str | int | float)) else abs(int(self.ctx)) if (self.ctx and isinstance(self.ctx, str) and self.ctx[1:].isigit() and (self.ctx[0].isdigit() or self.ctx[0] == '-')) else abs(float(self.ctx))
+    
+    def __round__(self):
+        return round(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
+    
+    def __floor__(self):
+        return math.floor(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
+    
+    def __ceil__(self):
+        return math.ceil(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
+
     def __gt__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
         return self.ctx > other
@@ -528,6 +540,26 @@ class NanoJekyllContext:
     def _concat_(xs, ys = []):
         # https://shopify.github.io/liquid/filters/concat/
         return (list(xs) if xs else []) + list(ys)
+    
+    @staticmethod
+    def _abs_(x):
+        # https://shopify.github.io/liquid/filters/abs/
+        return abs(x)
+    
+    @staticmethod
+    def _round_(x):
+        # https://shopify.github.io/liquid/filters/round/
+        return round(x)
+    
+    @staticmethod
+    def _ceil_(x):
+        # https://shopify.github.io/liquid/filters/ceil/
+        return math.ceil(x)
+    
+    @staticmethod
+    def _floor_(x):
+        # https://shopify.github.io/liquid/filters/floor/
+        return math.floor(x)
     
     @staticmethod
     def _slice_(xs, begin, cnt = 1):
