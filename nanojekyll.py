@@ -544,6 +544,16 @@ class NanoJekyllContext:
         return str(x or '') or str(xs or '')
 
     @staticmethod
+    def _truncate_(x, y, z = '...'):
+        # https://shopify.github.io/liquid/filters/truncate/
+        return (str(x) if len(x) <= y - len(z) else str(x)[:y - len(z)].rstrip() + z) if x else ''
+    
+    @staticmethod
+    def _truncatewords_(x, y, z = '...'):
+        # https://shopify.github.io/liquid/filters/truncatewords/
+        return (str(x) if len(str(x).split()) <= y - len(z) else ' '.join(str(x).split()[:y - len(z)]).rstrip() + z) if x else ''
+
+    @staticmethod
     def _join_(xs, sep = ''):
         # https://shopify.github.io/liquid/filters/join/
         return sep.join(str(x) for x in xs) if xs else ''
@@ -562,6 +572,11 @@ class NanoJekyllContext:
     def _compact_(xs):
         # https://shopify.github.io/liquid/filters/compact/
         return list(filter(bool, xs)) if xs else []
+    
+    @staticmethod
+    def _uniq_(xs):
+        # https://shopify.github.io/liquid/filters/uniq/
+        return list({x : None for x in xs}.keys()) if xs else []
     
     @staticmethod
     def _abs_(x):

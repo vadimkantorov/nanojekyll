@@ -57,9 +57,9 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx
 - `strip_newlines`
 - `sum`
 - `times`
-    - `truncate`
-    - `truncatewords`
-    - `uniq`
+- `truncate`
+- `truncatewords`
+- `uniq`
 - `upcase`
     - `url_decode`
     - `url_encode`
