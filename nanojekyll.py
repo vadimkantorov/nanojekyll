@@ -359,6 +359,18 @@ class NanoJekyllContext:
     def __ceil__(self):
         return math.ceil(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
 
+    def __mul__(self, other):
+        return NanoJekyllContext(self.ctx * other)
+    
+    def __truediv__(self, other):
+        return NanoJekyllContext((self.ctx or 0) / other)
+    
+    def __floordiv__(self, other):
+        return NanoJekyllContext(math.floor((self.ctx or 0) // other))
+    
+    def __mod__(self, other):
+        return NanoJekyllContext((self.ctx or 0) % other)
+
     def __gt__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
         return self.ctx > other
@@ -522,9 +534,14 @@ class NanoJekyllContext:
         return html.escape(str(s)) if s else ''
 
     @staticmethod
-    def _append_(xs, item):
+    def _append_(xs, x):
         # https://shopify.github.io/liquid/filters/append/
-        return str(xs or '') + str(item or '')
+        return str(xs or '') + str(x or '')
+    
+    @staticmethod
+    def _prepend_(xs, x):
+        # https://shopify.github.io/liquid/filters/prepend/
+        return str(x or '') or str(xs or '')
 
     @staticmethod
     def _join_(xs, sep = ''):
@@ -540,12 +557,27 @@ class NanoJekyllContext:
     def _concat_(xs, ys = []):
         # https://shopify.github.io/liquid/filters/concat/
         return (list(xs) if xs else []) + list(ys)
+
+    @staticmethod
+    def _compact_(xs):
+        # https://shopify.github.io/liquid/filters/compact/
+        return list(filter(bool, xs)) if xs else []
     
     @staticmethod
     def _abs_(x):
         # https://shopify.github.io/liquid/filters/abs/
         return abs(x)
     
+    @staticmethod
+    def _at_least_(x):
+        # https://shopify.github.io/liquid/filters/at_least/
+        return min(self.ctx, x) if isinstance(self.ctx, int | float) else float(x or 0)
+    
+    @staticmethod
+    def _at_most_(x):
+        # https://shopify.github.io/liquid/filters/at_most/
+        return max(self.ctx, x) if isinstance(self.ctx, int | float) else float(x or 0)
+
     @staticmethod
     def _round_(x):
         # https://shopify.github.io/liquid/filters/round/
@@ -605,7 +637,12 @@ class NanoJekyllContext:
     @staticmethod
     def _remove_(x, y):
         # https://shopify.github.io/liquid/filters/remove/
-        return x.replace(y, '') if x else ''
+        return str(x).replace(y, '') if x else ''
+    
+    @staticmethod
+    def _replace_(x, y, z = ''):
+        # https://shopify.github.io/liquid/filters/replace/
+        return str(x).replace(y or '', z or '') if x else ''
     
     @staticmethod
     def _strip_(x):
@@ -628,9 +665,19 @@ class NanoJekyllContext:
         return ' '.join(str(x).split()) if x else ''
     
     @staticmethod
+    def _newline_to_br_(x):
+        # https://shopify.github.io/liquid/filters/newline_to_br/
+        return str(x).replace('\n', '<br />\n') if x else ''
+
+    @staticmethod
     def _strip_html_(x):
         # https://shopify.github.io/liquid/filters/strip_html/
         return re.sub(r'<[^>]+>', '', str(x)) if x else ''
+    
+    @staticmethod
+    def _strip_newlines_(x):
+        # https://shopify.github.io/liquid/filters/strip_newlines/
+        return str(x).replace('\r', '').replace('\n', '') if x else ''
     
     @staticmethod
     def _capitalize_(x):
@@ -652,6 +699,26 @@ class NanoJekyllContext:
     def _where_(xs, key, value):
         # https://shopify.github.io/liquid/filters/where/
         return [x for x in xs if x.get(key, None) == value] if xs else []
+    
+    @staticmethod
+    def _sum_(xs, key = ''):
+        # https://shopify.github.io/liquid/filters/sum/
+        return sum(x if not key else x.get(key, 0) for x in xs) if xs else 0
+    
+    @staticmethod
+    def _times_(x, y = 1):
+        # https://shopify.github.io/liquid/filters/times/
+        return (x * y) if x else 0
+
+    @staticmethod
+    def _divided_by_(x, y = 1):
+        # https://shopify.github.io/liquid/filters/divided_by/
+        return (x // y) if isinstance(y, int) else (x / y) if isinstance(y, float) else 0
+    
+    @staticmethod
+    def _modulo_(x, y = 1):
+        # https://shopify.github.io/liquid/filters/modulo/
+        return (x % y) if x and y else 0
 
     @staticmethod
     def _map_(xs, key):
