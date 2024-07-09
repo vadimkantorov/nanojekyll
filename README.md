@@ -23,12 +23,12 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `ceil`
 - `compact`
 - `concat`
-    - `date`
+- `date`
 - `default`
 - `divided_by`
 - `downcase`
 - `escape`
-    - `escape_once`
+- `escape_once`
 - `first`
 - `floor`
 - `join`
@@ -61,8 +61,8 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `truncatewords`
 - `uniq`
 - `upcase`
-    - `url_decode`
-    - `url_encode`
+- `url_decode`
+- `url_encode`
 - `where`
 
 # Supported [Jekyll filters](https://jekyllrb.com/docs/liquid/filters/)

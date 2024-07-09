@@ -1,4 +1,4 @@
-import os, sys, re, html, json, math, datetime
+import os, sys, re, html, json, math, datetime, urllib.parse
 import inspect
 
 def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
@@ -118,7 +118,7 @@ class NanoJekyllTemplate:
     def codegen(templates, includes = {}, global_variables = [], plugins = {}, newline = '\n'):
         indent_level = 1
 
-        python_source  = 'import os, sys, re, html, json, math, datetime' + newline
+        python_source  = 'import os, sys, re, html, json, math, datetime, urllib.parse' + newline
         python_source += inspect.getsource(NanoJekyllContext) + newline
         python_source += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + newline
         python_source += newline.join(str(NanoJekyllTemplate(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins))) for template_name, template_code in templates.items()) + newline
@@ -333,6 +333,7 @@ class NanoJekyllContext:
     
     def __init__(self, ctx = None):
         # https://shopify.github.io/liquid/basics/operators/
+        # https://shopify.dev/docs/api/liquid/filters/escape
         # https://jekyllrb.com/docs/liquid/filters/
     
         self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllContext) else ctx
@@ -480,6 +481,52 @@ class NanoJekyllContext:
     @staticmethod
     def _date_(dt, date_format):
         # https://shopify.github.io/liquid/filters/date/
+        #%Y
+        #%m
+        #%d 
+        #%H
+        #%M
+        #%b
+        #%y
+        #Symbol	Meaning	Example
+        #%a	Abbreviated weekday name (Sun, Mon, ...)	Sun
+        #%A	Full weekday name (Sunday, Monday, ...)	Sunday
+        #%b	Abbreviated month name (Jan, Feb, ...)	Jan
+        #%B	Full month name (January, February, ...)	January
+        #%c	Date and time representation	Mon Jan 01 00:00:00 2023
+        #%C	Century number (year/100) as a 2-digit integer	20
+        #%d	Day of the month as a 2-digit integer	01
+        #%D	Date in the format %m/%d/%y	01/01/23
+        #%e	Day of the month as a decimal number, padded with space	1
+        #%F	ISO 8601 date format (yyyy-mm-dd)	2023-01-01
+        #%H	Hour of the day (00..23) as a 2-digit integer	00
+        #%I	Hour of the day (01..12) as a 2-digit integer	12
+        #%j	Day of the year as a 3-digit integer	001
+        #%k	Hour of the day (0..23) as a decimal number, padded	0
+        #%l	Hour of the day (1..12) as a decimal number, padded	12
+        #%m	Month of the year as a 2-digit integer	01
+        #%M	Minute of the hour as a 2-digit integer	00
+        #%n	Newline
+        #%p	AM or PM	AM
+        #%P	am or pm	am
+        #%r	Time in AM/PM format	12:00:00 AM
+        #%R	Time in 24-hour format	00:00
+        #%s	Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)	1577836800
+        #%S	Second of the minute as a 2-digit integer	00
+        #%t	Tab
+        #%T	Time in 24-hour format with seconds	00:00:00
+        #%u	Day of the week as a decimal, Monday being 1	1
+        #%U	Week number of the year (Sunday as the first day)	00
+        #%V	Week number of the year (ISO week numbering)	01
+        #%w	Day of the week as a decimal, Sunday being 0	0
+        #%W	Week number of the year (Monday as the first day)	00
+        #%x	Preferred representation of date	01/01/23
+        #%X	Preferred representation of time	00:00:00
+        #%y	Year without century as a 2-digit integer	23
+        #%Y	Year with century as a 4-digit integer	2023
+        #%z	Time zone offset from UTC in the form +HHMM or -HHMM	+0000
+        #%Z	Time zone name or abbreviation	UTC
+        #%%	A literal '%' character	%
         return str(dt) if dt else '' #.strftime(date_format)
 
     @staticmethod
@@ -492,6 +539,21 @@ class NanoJekyllContext:
         # https://shopify.github.io/liquid/filters/escape/
         # https://github.com/shopify/liquid/blob/77bc56a1c28a707c2b222559ffb0b7b1c5588928/lib/liquid/standardfilters.rb#L99
         return html.escape(str(s)) if s else ''
+    
+    @staticmethod
+    def _escape_once_(s):
+        # https://shopify.github.io/liquid/filters/escape_once/
+        return html.escape(html.unescape(str(s))) if s else ''
+    
+    @staticmethod
+    def _url_encode_(s):
+        # https://shopify.github.io/liquid/filters/url_encode/
+        return urllib.parse.quote_plus(str(s)) if s else ''
+    
+    @staticmethod
+    def _url_decode_(s):
+        # https://shopify.github.io/liquid/filters/url_decode/
+        return urllib.parse.unquote_plus(str(s)) if s else ''
     
     @staticmethod
     def _append_(xs, x):
