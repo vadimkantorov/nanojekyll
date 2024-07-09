@@ -13,7 +13,7 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 > When deploying to GitHub Pages, do not forget to set `GitHub Actions` as GitHub Pages source in your repo [`Settings -> Pages -> Build and deployment -> Source`](https://github.com/vadimkantorov/nanojekyll/settings/pages). Also do not forget to configure or disable branch protection rule (`No restriction`) in [`Settings -> Environments -> github-pages -> Deployment branches and tags`](https://github.com/vadimkantorov/nanojekyll/settings/environments/).
 
 # Supported [Liquid filters](https://shopify.github.io/liquid/filters/)
-TODO: fix lt/gt wrt None; fix type checks of self.ctx
+TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bool__`
 
 - `abs`
 - `append`
@@ -41,9 +41,9 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx
 - `plus`
 - `prepend`
 - `remove`
-    - `remove_first`
+- `remove_first`
 - `replace`
-    - `replace_first`
+- `replace_first`
 - `reverse`
 - `round`
 - `rstrip`

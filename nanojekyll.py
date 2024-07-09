@@ -655,9 +655,23 @@ class NanoJekyllContext:
         return str(x).replace(y, '') if x else ''
     
     @staticmethod
+    def _remove_first_(x, y):
+        # https://shopify.github.io/liquid/filters/replace_first/
+        x, y = str(x or ''), str(y or '')
+        idx = x.index(y)
+        return (x[:idx] + x[idx + len(y):] if idx >= 0 else x) if x else ''
+    
+    @staticmethod
     def _replace_(x, y, z = ''):
         # https://shopify.github.io/liquid/filters/replace/
         return str(x).replace(y or '', z or '') if x else ''
+    
+    @staticmethod
+    def _replace_first_(x, y, z = ''):
+        # https://shopify.github.io/liquid/filters/replace_first/
+        x, y, z = str(x or ''), str(y or ''), str(z or '')
+        idx = x.index(y)
+        return (x[:idx] + z + x[idx + len(y):] if idx >= 0 else x) if x else ''
     
     @staticmethod
     def _strip_(x):
