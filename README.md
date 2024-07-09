@@ -50,7 +50,7 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `size`
 - `slice`
 - `sort`
-    - `sort_natural`
+- `sort_natural`
 - `split`
 - `strip`
 - `strip_html`
@@ -96,7 +96,7 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `pop`
 - `shift`
 - `unshift`
-    - `inspect`
+- `inspect`
 
 
 # References

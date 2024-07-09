@@ -515,6 +515,11 @@ class NanoJekyllContext:
     def _jsonify_(x):
         # https://jekyllrb.com/docs/liquid/filters/#data-to-json
         return json.dumps(x, ensure_ascii = False) if x else '{}'
+    
+    @staticmethod
+    def _inspect_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#inspect
+        return repr(x)
 
     @staticmethod
     def _default_(s, t):
@@ -717,6 +722,12 @@ class NanoJekyllContext:
     def _sort_(xs, key = ''):
         # https://shopify.github.io/liquid/filters/sort/
         expr = eval(f'lambda item: item.{key}') if key else None
+        return sorted([NanoJekyllContext(x) for x in xs], key = expr) if xs else []
+    
+    @staticmethod
+    def _sort_natural_(xs, key = ''):
+        # https://shopify.github.io/liquid/filters/sort_natural/
+        expr = eval(f'lambda item, lower = (lambda v: v.lower() if isinstance(v, str) else v): lower(item.{key})') if key else (lambda v: v.lower() if isinstance(v, str) else v)
         return sorted([NanoJekyllContext(x) for x in xs], key = expr) if xs else []
     
     @staticmethod
