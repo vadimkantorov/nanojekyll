@@ -333,6 +333,8 @@ class NanoJekyllContext:
     
     def __init__(self, ctx = None):
         # https://shopify.github.io/liquid/basics/operators/
+        # https://jekyllrb.com/docs/liquid/filters/
+    
         self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllContext) else ctx
     
     def __or__(self, other):
@@ -439,8 +441,8 @@ class NanoJekyllContext:
         return res
     
     @staticmethod
-    def sanitize_template_name(template_name):
-        return os.path.splitext(os.path.basename(template_name))[0].translate({ord('/') : '_', ord('-'): '_', ord('.') : '_'})
+    def sanitize_template_name(template_name, translate = {ord('/') : '_', ord('-'): '_', ord('.') : '_'}):
+        return os.path.splitext(os.path.basename(template_name))[0].translate(translate)
 
     def render(self, template_name, is_plugin = False):
         fn = getattr(self, ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name), None)
@@ -459,8 +461,6 @@ class NanoJekyllContext:
     def size(self):
         return NanoJekyllContext(self._size_(self))
     
-    # https://shopify.github.io/liquid/basics/operators/
-    # https://jekyllrb.com/docs/liquid/filters/
     
     @staticmethod
     def _first_(xs):
@@ -478,48 +478,9 @@ class NanoJekyllContext:
         return len(xs) if xs else 0
     
     @staticmethod
-    def _date_to_xmlschema_(dt):
-        # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
-        return str(dt) if dt else ''
-    
-    @staticmethod
     def _date_(dt, date_format):
         # https://shopify.github.io/liquid/filters/date/
         return str(dt) if dt else '' #.strftime(date_format)
-
-    def _relative_url_(self, url):
-        # https://jekyllrb.com/docs/liquid/filters/#relative-url
-        url = str(url) if url else ''
-        base_url = self.ctx.get('site', {}).get('baseurl', '')
-        if base_url:
-            return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
-        return ('.' + url) if url.startswith('/') else url
-
-    def _absolute_url_(self, url):
-        # https://jekyllrb.com/docs/liquid/filters/#absolute-url
-        url = str(url) if url else ''
-        site_url = self.ctx.get('site', {}).get('url', '')
-        base_url = self.ctx.get('site', {}).get('baseurl', '')
-        if site_url:
-            return os.path.join(site_url, base_url.lstrip('/'), url.lstrip('/'))
-        if base_url:
-            return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
-        return ('.' + url) if url.startswith('/') else url
-    
-    @staticmethod
-    def _to_integer_(x):
-        # https://jekyllrb.com/docs/liquid/filters/#to-integer
-        return int(x)
-
-    @staticmethod
-    def _jsonify_(x):
-        # https://jekyllrb.com/docs/liquid/filters/#data-to-json
-        return json.dumps(x, ensure_ascii = False) if x else '{}'
-    
-    @staticmethod
-    def _inspect_(x):
-        # https://jekyllrb.com/docs/liquid/filters/#inspect
-        return repr(x)
 
     @staticmethod
     def _default_(s, t):
@@ -532,12 +493,6 @@ class NanoJekyllContext:
         # https://github.com/shopify/liquid/blob/77bc56a1c28a707c2b222559ffb0b7b1c5588928/lib/liquid/standardfilters.rb#L99
         return html.escape(str(s)) if s else ''
     
-    @staticmethod
-    def _xml_escape_(s):
-        # https://jekyllrb.com/docs/liquid/filters/#xml-escape
-        # https://github.com/jekyll/jekyll/blob/96a4198c27482f061e145953066af501d5e085e2/lib/jekyll/filters.rb#L77
-        return html.escape(str(s)) if s else ''
-
     @staticmethod
     def _append_(xs, x):
         # https://shopify.github.io/liquid/filters/append/
@@ -625,26 +580,6 @@ class NanoJekyllContext:
             return xs[int(begin) - int(cnt) : (int(begin) + 1 if int(begin) != -1 else None)]
     
     @staticmethod
-    def _unshift_(xs, elem):
-        # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return [elem] + (xs or [])
-    
-    @staticmethod
-    def _push_(xs, elem):
-        # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return (xs or []) + [elem]
-    
-    @staticmethod
-    def _pop_(xs):
-        # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return xs[:-1] if xs else []
-    
-    @staticmethod
-    def _shift_(xs):
-        # https://jekyllrb.com/docs/liquid/filters/#array-filters
-        return xs[1:] if xs else []
-
-    @staticmethod
     def _minus_(xs, sep = 0):
         # https://shopify.github.io/liquid/filters/minus/
         return (xs if xs else 0) - sep
@@ -693,11 +628,6 @@ class NanoJekyllContext:
         # https://shopify.github.io/liquid/filters/rstrip/
         return str(x).rstrip() if x else ''
 
-    @staticmethod
-    def _normalize_whitespace_(x):
-        # https://jekyllrb.com/docs/liquid/filters/#normalize-whitespace
-        return ' '.join(str(x).split()) if x else ''
-    
     @staticmethod
     def _newline_to_br_(x):
         # https://shopify.github.io/liquid/filters/newline_to_br/
@@ -766,6 +696,81 @@ class NanoJekyllContext:
         return [x[key] for x in xs] if xs else []
     
     @staticmethod
+    def _downcase_(x):
+        # https://shopify.github.io/liquid/filters/downcase/
+        return str(x).lower() if x else ''
+    
+    @staticmethod
+    def _upcase_(x):
+        # https://shopify.github.io/liquid/filters/upcase/
+        return str(x).upper() if x else ''
+    
+    
+    def _relative_url_(self, url):
+        # https://jekyllrb.com/docs/liquid/filters/#relative-url
+        url = str(url) if url else ''
+        base_url = self.ctx.get('site', {}).get('baseurl', '')
+        if base_url:
+            return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
+        return ('.' + url) if url.startswith('/') else url
+
+    def _absolute_url_(self, url):
+        # https://jekyllrb.com/docs/liquid/filters/#absolute-url
+        url = str(url) if url else ''
+        site_url = self.ctx.get('site', {}).get('url', '')
+        base_url = self.ctx.get('site', {}).get('baseurl', '')
+        if site_url:
+            return os.path.join(site_url, base_url.lstrip('/'), url.lstrip('/'))
+        if base_url:
+            return os.path.join('/' + base_url.lstrip('/'), url.lstrip('/'))
+        return ('.' + url) if url.startswith('/') else url
+    
+    @staticmethod
+    def _date_to_xmlschema_(dt):
+        # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
+        return str(dt) if dt else ''
+    
+    @staticmethod
+    def _normalize_whitespace_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#normalize-whitespace
+        return ' '.join(str(x).split()) if x else ''
+    
+    @staticmethod
+    def _xml_escape_(s):
+        # https://jekyllrb.com/docs/liquid/filters/#xml-escape
+        # https://github.com/jekyll/jekyll/blob/96a4198c27482f061e145953066af501d5e085e2/lib/jekyll/filters.rb#L77
+        return html.escape(str(s)) if s else ''
+    
+    @staticmethod
+    def _to_integer_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#to-integer
+        return int(x)
+
+    @staticmethod
+    def _number_of_words_(x, mode = ''):
+        # https://jekyllrb.com/docs/liquid/filters/#number-of-words
+        if not x:
+            return 0
+        if mode in ['cjk', 'auto']:
+            return len(re.findall(r'[\u4e00-\u9FFF]|[\u3040-\u30ff]|[\uac00-\ud7a3]' str(x)))
+        return len(str(x).split())
+
+    @staticmethod
+    def _array_to_sentence_(xs, y = 'and'):
+        # https://jekyllrb.com/docs/liquid/filters/#array-to-sentence
+        return ((', '.join(str(x) for x in xs[:-1]) + f', {y} ' + xs[-1]) if len(xs) > 2 else f' {y} '.join(str(x) for x in xs) if len(xs) == 2 else str(xs[0])) if xs else ''
+
+    @staticmethod
+    def _jsonify_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#data-to-json
+        return json.dumps(x, ensure_ascii = False) if x else '{}'
+    
+    @staticmethod
+    def _inspect_(x):
+        # https://jekyllrb.com/docs/liquid/filters/#inspect
+        return repr(x)
+    
+    @staticmethod
     def _where_exp_(xs, key, value):
         # https://jekyllrb.com/docs/liquid/filters/#where-expression
         expr = eval(f'lambda {key}: {value}', dict(nil = None, false = False, true = True))
@@ -777,14 +782,25 @@ class NanoJekyllContext:
         return str(x) if x else ''
 
     @staticmethod
-    def _downcase_(x):
-        # https://shopify.github.io/liquid/filters/downcase/
-        return str(x).lower() if x else ''
+    def _unshift_(xs, elem):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return [elem] + (xs or [])
     
     @staticmethod
-    def _upcase_(x):
-        # https://shopify.github.io/liquid/filters/upcase/
-        return str(x).upper() if x else ''
+    def _push_(xs, elem):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return (xs or []) + [elem]
+    
+    @staticmethod
+    def _pop_(xs):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return xs[:-1] if xs else []
+    
+    @staticmethod
+    def _shift_(xs):
+        # https://jekyllrb.com/docs/liquid/filters/#array-filters
+        return xs[1:] if xs else []
+
 
 
 class NanoJekyllPluginSeo(NanoJekyllTemplate):

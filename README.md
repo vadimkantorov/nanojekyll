@@ -80,8 +80,8 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `xml_escape`
     - `cgi_escape`
     - `uri_escape`
-    - `number_of_words`
-    - `array_to_sentence_string`
+- `number_of_words`
+- `array_to_sentence_string`
     - `markdownify`
 - `smartify`
     - `sassify`
