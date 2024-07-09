@@ -790,8 +790,55 @@ class NanoJekyllContext:
     @staticmethod
     def _date_to_xmlschema_(dt):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
+        
+        #Date to XML Schema
+        #Convert a Date into XML Schema (ISO 8601) format.
+        #{{ site.time | date_to_xmlschema }}
+        #2008-11-07T13:07:54-08:00
+        
         return str(dt) if dt else ''
     
+    @staticmethod
+    def _date_to_rfc822_(dt):
+        # https://jekyllrb.com/docs/liquid/filters/#date-to-rfc-822-format
+        
+        #Date to RFC-822 Format
+        #Convert a Date into the RFC-822 format used for RSS feeds.
+        #{{ site.time | date_to_rfc822 }}
+        #Mon, 07 Nov 2008 13:07:54 -0800
+
+        return str(dt) if dt else ''
+    
+    @staticmethod
+    def _date_to_string_(dt, y = 'ordinal', z = 'US'):
+        # https://jekyllrb.com/docs/liquid/filters/#date-to-string
+        
+        #Date to String
+        #Convert a date to short format.
+        #{{ site.time | date_to_string }}
+        #07 Nov 2008
+        #Date to String in ordinal US style
+        #Format a date to ordinal, US, short format. 3.8.0
+        #{{ site.time | date_to_string: "ordinal", "US" }}
+        #Nov 7th, 2008
+        
+        return str(dt) if dt else ''
+    
+    @staticmethod
+    def _date_to_long_string_(dt, y = 'ordinal', z = 'US'):
+        # https://jekyllrb.com/docs/liquid/filters/#date-to-long-string
+        
+        #Date to Long String
+        #Format a date to long format.
+        #{{ site.time | date_to_long_string }}
+        #07 November 2008
+        #Date to Long String in ordinal UK style
+        #Format a date to ordinal, UK, long format. 3.8.0
+        #{{ site.time | date_to_long_string: "ordinal" }}
+        #7th November 2008
+        
+        return str(dt) if dt else ''
+
     @staticmethod
     def _normalize_whitespace_(x):
         # https://jekyllrb.com/docs/liquid/filters/#normalize-whitespace

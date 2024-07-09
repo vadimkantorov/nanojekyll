@@ -69,9 +69,9 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `relative_url`
 - `absolute_url`
 - `date_to_xmlschema`
-    - `date_to_rfc822`
-    - `date_to_string`
-    - `date_to_long_string`
+- `date_to_rfc822`
+- `date_to_string`
+- `date_to_long_string`
 - `where_exp`
     - `find`
     - `find_exp`
