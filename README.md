@@ -13,7 +13,7 @@ Example inspired by [jekyll/minima@demo-site](https://github.com/jekyll/minima/t
 > When deploying to GitHub Pages, do not forget to set `GitHub Actions` as GitHub Pages source in your repo [`Settings -> Pages -> Build and deployment -> Source`](https://github.com/vadimkantorov/nanojekyll/settings/pages). Also do not forget to configure or disable branch protection rule (`No restriction`) in [`Settings -> Environments -> github-pages -> Deployment branches and tags`](https://github.com/vadimkantorov/nanojekyll/settings/environments/).
 
 # Supported [Liquid filters](https://shopify.github.io/liquid/filters/)
-TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bool__`
+TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bool__`, allow extra filters and a single template
 
 - `abs`
 - `append`
@@ -73,20 +73,20 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `date_to_string`
 - `date_to_long_string`
 - `where_exp`
-    - `find`
-    - `find_exp`
-    - `group_by`
-    - `group_by_exp`
+- `find`
+- `find_exp`
+- `group_by`
+- `group_by_exp`
 - `xml_escape`
-    - `cgi_escape`
-    - `uri_escape`
+- `cgi_escape`
+- `uri_escape`
 - `number_of_words`
 - `array_to_sentence_string`
-    - `markdownify`
+- `markdownify`
 - `smartify`
-    - `sassify`
-    - `scssify`
-    - `slugify`
+- `sassify`
+- `scssify`
+- `slugify`
 - `jsonify`
 - `normalize_whitespace`
 - `sort`
@@ -97,7 +97,6 @@ TODO: fix lt/gt wrt None; fix type checks of self.ctx; check that or calls `__bo
 - `shift`
 - `unshift`
 - `inspect`
-
 
 # References
 - https://aosabook.org/en/500L/a-template-engine.html
