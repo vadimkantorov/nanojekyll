@@ -116,6 +116,7 @@ class NanoJekyllTemplate:
     @staticmethod
     def codegen(templates, includes = {}, global_variables = [], plugins = {}, newline = '\n'):
         indent_level = 1
+        templates = templates if isinstance(templates, dict) else dict(default = templates)
 
         python_source  = 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse' + newline
         python_source += inspect.getsource(NanoJekyllContext) + newline
@@ -133,13 +134,14 @@ class NanoJekyllTemplate:
             cls = None
 
         return cls, python_source
-  
+
     def __init__(self, template_name = '', template_code = '', includes = {}, global_variables = [], plugins = [], indent_level = 0, code = []):
         self.includes = includes
         self.global_variables = global_variables
         self.plugins = plugins
         self.indent_level = indent_level
         self.code = code
+        self.add_line = lambda line = '': self.code.extend([' ' * 4 * self.indent_level, line, "\n"]) or len(self.code)
     
         split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
         function_name = NanoJekyllContext.sanitize_template_name(template_name)
@@ -272,10 +274,6 @@ class NanoJekyllTemplate:
             i += 1
 
         self.add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
-
-    def add_line(self, line = ''):
-        self.code.extend([' ' * 4 * self.indent_level, line, "\n"])
-        return len(self.code)
 
 class NanoJekyllContext:
     class NanoJekyllTrimLeft(str): pass
@@ -431,8 +429,8 @@ class NanoJekyllContext:
             code = expr
         return code
 
-    def render(self, template_name, is_plugin = False):
-        fn = getattr(self, ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name), None)
+    def render(self, template_name = '', is_plugin = False):
+        fn = getattr(self, ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name or 'default'), None)
         assert fn is not None and not isinstance(fn, NanoJekyllContext)
         return fn()
     
@@ -701,115 +699,52 @@ class NanoJekyllContext:
     def _upcase_(x):
         # https://shopify.github.io/liquid/filters/upcase/
         return str(x).upper() if x else ''
+   
+    @staticmethod
+    def _now_():
+        return datetime.datetime.now().astimezone()
     
     @staticmethod
-    def _date_(dt, date_format):
+    def _date_(dt = None, date_format = '%Y-%m-%d %H:%M:%S'):
         # https://shopify.github.io/liquid/filters/date/
-        #%Y
-        #%m
-        #%d 
-        #%H
-        #%M
-        #%b
-        #%y
-        #Symbol	Meaning	Example
-        #%a	Abbreviated weekday name (Sun, Mon, ...)	Sun
-        #%A	Full weekday name (Sunday, Monday, ...)	Sunday
-        #%b	Abbreviated month name (Jan, Feb, ...)	Jan
-        #%B	Full month name (January, February, ...)	January
-        #%c	Date and time representation	Mon Jan 01 00:00:00 2023
-        #%C	Century number (year/100) as a 2-digit integer	20
-        #%d	Day of the month as a 2-digit integer	01
-        #%D	Date in the format %m/%d/%y	01/01/23
-        #%e	Day of the month as a decimal number, padded with space	1
-        #%F	ISO 8601 date format (yyyy-mm-dd)	2023-01-01
-        #%H	Hour of the day (00..23) as a 2-digit integer	00
-        #%I	Hour of the day (01..12) as a 2-digit integer	12
-        #%j	Day of the year as a 3-digit integer	001
-        #%k	Hour of the day (0..23) as a decimal number, padded	0
-        #%l	Hour of the day (1..12) as a decimal number, padded	12
-        #%m	Month of the year as a 2-digit integer	01
-        #%M	Minute of the hour as a 2-digit integer	00
-        #%n	Newline
-        #%p	AM or PM	AM
-        #%P	am or pm	am
-        #%r	Time in AM/PM format	12:00:00 AM
-        #%R	Time in 24-hour format	00:00
-        #%s	Unix timestamp (seconds since 1970-01-01 00:00:00 UTC)	1577836800
-        #%S	Second of the minute as a 2-digit integer	00
-        #%t	Tab
-        #%T	Time in 24-hour format with seconds	00:00:00
-        #%u	Day of the week as a decimal, Monday being 1	1
-        #%U	Week number of the year (Sunday as the first day)	00
-        #%V	Week number of the year (ISO week numbering)	01
-        #%w	Day of the week as a decimal, Sunday being 0	0
-        #%W	Week number of the year (Monday as the first day)	00
-        #%x	Preferred representation of date	01/01/23
-        #%X	Preferred representation of time	00:00:00
-        #%y	Year without century as a 2-digit integer	23
-        #%Y	Year with century as a 4-digit integer	2023
-        #%z	Time zone offset from UTC in the form +HHMM or -HHMM	+0000
-        #%Z	Time zone name or abbreviation	UTC
-        #%%	A literal '%' character	%
-        return str(dt) if dt else '' #.strftime(date_format)
+        if not dt: dt = NanoJekyllContext._now_()
+        
+        return dt.strftime(date_format)
 
     
     @staticmethod
-    def _date_to_xmlschema_(dt):
+    def _date_to_xmlschema_(dt = None):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
-        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L49
+        if not dt: dt = NanoJekyllContext._now_()
         
-        #Date to XML Schema
-        #Convert a Date into XML Schema (ISO 8601) format.
-        #{{ site.time | date_to_xmlschema }}
-        #2008-11-07T13:07:54-08:00
-        
-        return dt.isoformat(timespec='seconds') if dt else ''
+        return dt.isoformat(timespec = 'seconds')
     
     
     @staticmethod
-    def _date_to_rfc822_(dt):
+    def _date_to_rfc822_(dt = None):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-rfc-822-format
-        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L65
-        
-        #Date to RFC-822 Format
-        #Convert a Date into the RFC-822 format used for RSS feeds.
-        #{{ site.time | date_to_rfc822 }}
-        #Mon, 07 Nov 2008 13:07:54 -0800
+        if not dt: dt = NanoJekyllContext._now_()
 
-        return datetime.datetime.strftime(dt, '%a, %d %b %Y %H:%M:%S %z') if dt else ''
+        return NanoJekyllContext._date_(dt, '%a, %d %b %Y %H:%M:%S %z')
     
     @staticmethod
-    def _date_to_string_(dt, y = 'ordinal', z = 'US'):
+    def _date_to_string_(dt = None, type = '', style = 'UK', month_format = '%b'):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-string
-        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L18
-        
-        #Date to String
-        #Convert a date to short format.
-        #{{ site.time | date_to_string }}
-        #07 Nov 2008
-        #Date to String in ordinal US style
-        #Format a date to ordinal, US, short format. 3.8.0
-        #{{ site.time | date_to_string: "ordinal", "US" }}
-        #Nov 7th, 2008
-        
-        return datetime.datetime.strftime(dt, '%d %b %Y') if dt else ''
+        if not dt: dt = NanoJekyllContext._now_()
+
+        d = datetime.datetime.strftime(dt, '%d')
+        _d = datetime.datetime.strftime(dt, '%-d')
+        m = datetime.datetime.strftime(dt, month_format)
+        y = datetime.datetime.strftime(dt, '%Y')
+        dd = (str(d) + {'1' : 'st', '21' : 'st', '31' : 'st', '2': 'nd', '22' : 'nd', '3': 'rd', '23' : 'rd'}.get(d, 'th')) if type.lower() == 'ordinal' else _d
+        return f'{m} {dd}, {y}' if style.lower() == 'US' else f'{dd} {m} {y}'
     
     @staticmethod
-    def _date_to_long_string_(dt, y = 'ordinal', z = 'US'):
+    def _date_to_long_string_(dt = None, type = '', style = 'UK'):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-long-string
-        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L33
-        
-        #Date to Long String
-        #Format a date to long format.
-        #{{ site.time | date_to_long_string }}
-        #07 November 2008
-        #Date to Long String in ordinal UK style
-        #Format a date to ordinal, UK, long format. 3.8.0
-        #{{ site.time | date_to_long_string: "ordinal" }}
-        #7th November 2008
-        
-        return str(dt) if dt else ''
+        if not dt: dt = NanoJekyllContext._now_()
+
+        return NanoJekyllContext._date_to_string_(dt, type = type, style = style, month_format = '%B')
     
     @staticmethod
     def _slugify_(s, mode = '', space = '_', lower = True):
