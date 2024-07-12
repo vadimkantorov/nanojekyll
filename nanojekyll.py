@@ -1,4 +1,5 @@
 import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse
+
 class NanoJekyllContext:
     def __init__(self, ctx = None):
         # https://shopify.github.io/liquid/basics/operators/
@@ -8,12 +9,148 @@ class NanoJekyllContext:
     
     @staticmethod
     def codegen(templates, includes = {}, global_variables = [], plugins = {}, newline = '\n'):
+        def codegen_single_template(template_name = '', template_code = '', includes = {}, global_variables = [], plugins = [], indent_level = 0, code = []):
+            add_line = lambda line = '': code.extend([' ' * 4 * indent_level, line, "\n"]) or len(code)
+        
+            template_code = template_code or getattr(self, 'template_code', '')
+            split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
+            function_name = NanoJekyllContext.sanitize_template_name(template_name)
+            filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
+            tokens = split_tokens(template_code)
+            
+            # https://shopify.github.io/liquid/tags/iteration/#forloop-object
+            add_line(f'def render_{function_name}(self):')
+            indent_level += 1
+            add_line('nil, empty, false, true, NanoJekyllResult, cycle_cache = None, None, False, True, [], {}')
+            add_line('class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1')
+            add_line('( ' + ', '.join(filters_names        ) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in filters_names) + ' )')
+            add_line('( ' + ', '.join(global_variables) +' ) = ( ' + ', '.join(NanoJekyllContext.__name__ + f'(self.ctx.get({k!r}))' for k in global_variables) + ' )')
+            
+            i = 0
+            while i < len(tokens):
+                token = tokens[i]
+                b = 3 if token.startswith('{%-') or token.startswith('{{-') else 2
+                e = -3 if token.endswith('-%}') or token.endswith('-}}') else -2
+                token_inner = token[b:e].strip()
+                words = token_inner.split()
+                
+                if b == 3:
+                    add_line("NanoJekyllResult.append(self.NanoJekyllTrimLeft())")
+
+                if token.startswith('{{'):
+                    expr = NanoJekyllContext.expr_code(token_inner)
+                    add_line(f"NanoJekyllResult.append(str({expr}))")
+
+                elif token.startswith('{%'):
+                    if words[0] == '-':
+                        del words[0]
+                    if words[-1] == '-':
+                        del words[-1]
+
+                    if words[0] == 'comment':
+                        tokens_i_end = tokens[i].replace(' ', '').replace('comment', 'endcomment')
+                        while tokens[i].replace(' ', '') != tokens_i_end:
+                            i += 1
+                    
+                    elif words[0] == 'cycle':
+                        line_number = add_line('#')
+                        add_line(f'NanoJekyllResult.append(self.cycle(line_number = {line_number}, cycle_cache = cycle_cache, vals = ( ' + ' '.join(words[1:]) + ') ))')
+        
+                    elif words[0] == 'highlight':
+                        lang = ''.join(words[1:])
+                        add_line(f'NanoJekyllResult.append("\\n```{lang}\\n")')
+                        tokens_i_end = '{%endhighlight%}'
+                        i += 1
+                        while tokens[i].replace(' ', '') != tokens_i_end:
+                            add_line('NanoJekyllResult.append(' + repr(tokens[i]) + ')')
+                            i += 1
+                        add_line('NanoJekyllResult.append("\\n```\\n")')
+                    
+                    elif words[0] == 'unless':
+                        if 'contains' in words:
+                            assert len(words) == 4 and words[2] == 'contains'
+                            words = [words[0], words[3], 'in', words[1]]
+                        add_line("if not( {} ):".format(' '.join(words[1:])))
+                        indent_level += 1
+
+                    elif words[0] == 'if':
+                        if 'contains' in words:
+                            assert len(words) == 4 and words[2] == 'contains'
+                            words = [words[0], words[3], 'in', words[1]]
+                        add_line("if {}:".format(' '.join(words[1:])))
+                        indent_level += 1
+                    
+                    elif words[0] == 'elsif':
+                        indent_level -= 1
+                        add_line("elif {}:".format(' '.join(words[1:])))
+                        indent_level += 1
+                    
+                    elif words[0] == 'else':
+                        indent_level -= 1
+                        add_line("else:".format(' '.join(words[1:])))
+                        indent_level += 1
+                    
+                    elif words[0] == 'for':
+                        # https://shopify.dev/docs/api/liquid/objects/forloop
+                        assert len(words) in [4, 6] and words[2] == 'in', f'Dont understand for: {token=}'
+
+                        forloop_cnt = add_line('#')
+                        add_line('forloop_{} = list({})'.format(forloop_cnt, NanoJekyllContext.expr_code(words[3])))
+                        if len(words) == 6 and words[4] == 'limit:':
+                            add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(forloop_cnt, NanoJekyllContext.expr_code(words[5])))
+                        add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], forloop_cnt))
+                        indent_level += 1
+                        add_line('forloop.index, forloop.rindex, forloop.rindex0, forloop.first, forloop.last, forloop.length = forloop.index0 + 1, len(forloop_{0}) - forloop.index0, len(forloop_{0}) - forloop.index0 - 1, forloop.index0 == 0, forloop.index0 == len(forloop_{0}) - 1, len(forloop_{0})'.format(forloop_cnt))
+                    
+                    elif words[0].startswith('end'):
+                        indent_level -= 1
+
+                    elif words[0] == 'include':
+                        template_name = words[1]
+                        beg = None
+                        if len(words) > 2 and '=' in words:
+                            beg = ([k for k, w in enumerate(words) if w == '='] or [0])[0] - 1
+                            add_line('include=' +  NanoJekyllContext.__name__ + '(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2] for k in range(beg, len(words), 3)) + '))')
+                        template_name = ' '.join(words[1:beg])
+
+                        if '{{' not in template_name and '}}' not in template_name:
+                            frontmatter_include, template_include = includes[template_name]
+                            tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
+                        else:
+                            template_name = ' '.join(words[1:]).replace('{{', '{').replace('}}', '}')
+                            template_name = 'f' + repr(template_name)
+                            add_line('include_name = ' + template_name)
+                            add_line('NanoJekyllResult.append(self.includes[include_name][-1])')
+                    
+                    elif words[0] == 'assign':
+                        assert words[2] == '='
+                        expr = NanoJekyllContext.expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
+                        var_name = words[1]
+                        add_line('{} = {}'.format(var_name, expr))
+
+                    elif words[0] in plugins: 
+                        template_name = words[0]
+                        add_line(f'assert bool(self.render_plugin_{template_name}); tmp = self.render_plugin_{template_name}(); (NanoJekyllResult.extend if isinstance(tmp, list) else NanoJekyllResult.append)(tmp)')
+                    else:
+                        assert False, ('Dont understand tag: ' + words[0])
+
+                else:
+                    if token:
+                        add_line("NanoJekyllResult.append({})".format(repr(token)))
+                
+                if e == -3:
+                    add_line('NanoJekyllResult.append(self.NanoJekyllTrimRight())')
+                i += 1
+
+            add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
+            return ''.join(code)
+        
         templates = templates if isinstance(templates, dict) else dict(default = templates)
         indent_level = 1
         python_source  = 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse' + newline
         python_source += inspect.getsource(NanoJekyllContext) + newline
         python_source += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + newline
-        python_source += newline.join(NanoJekyllContext.codegen_single_template(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins)) for template_name, template_code in templates.items()) + newline
+        python_source += newline.join(codegen_single_template(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins)) for template_name, template_code in templates.items()) + newline
         python_source += newline.join(''.join(Plugin(template_name = 'plugin_' + plugin_name, includes = includes, global_variables = global_variables, indent_level = indent_level).code) for plugin_name, Plugin in plugins.items()) + newline
         try:
             global_namespace = {}
@@ -23,143 +160,6 @@ class NanoJekyllContext:
             print(e)
             cls = None
         return cls, python_source
-    
-    @staticmethod
-    def codegen_single_template(template_name = '', template_code = '', includes = {}, global_variables = [], plugins = [], indent_level = 0, code = []):
-        add_line = lambda line = '': code.extend([' ' * 4 * indent_level, line, "\n"]) or len(code)
-    
-        split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
-        function_name = NanoJekyllContext.sanitize_template_name(template_name)
-        filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
-        template_code = template_code or getattr(self, 'template_code', '')
-        tokens = split_tokens(template_code)
-        
-        # https://shopify.github.io/liquid/tags/iteration/#forloop-object
-        add_line(f'def render_{function_name}(self):')
-        indent_level += 1
-        add_line('nil, empty, false, true, NanoJekyllResult, cycle_cache = None, None, False, True, [], {}')
-        add_line('class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1')
-        add_line('( ' + ', '.join(filters_names        ) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in filters_names) + ' )')
-        add_line('( ' + ', '.join(global_variables) +' ) = ( ' + ', '.join(NanoJekyllContext.__name__ + f'(self.ctx.get({k!r}))' for k in global_variables) + ' )')
-        
-        i = 0
-        while i < len(tokens):
-            token = tokens[i]
-            b = 3 if token.startswith('{%-') or token.startswith('{{-') else 2
-            e = -3 if token.endswith('-%}') or token.endswith('-}}') else -2
-            token_inner = token[b:e].strip()
-            words = token_inner.split()
-            
-            if b == 3:
-                add_line("NanoJekyllResult.append(self.NanoJekyllTrimLeft())")
-
-            if token.startswith('{{'):
-                expr = NanoJekyllContext.expr_code(token_inner)
-                add_line(f"NanoJekyllResult.append(str({expr}))")
-
-            elif token.startswith('{%'):
-                if words[0] == '-':
-                    del words[0]
-                if words[-1] == '-':
-                    del words[-1]
-
-                if words[0] == 'comment':
-                    tokens_i_end = tokens[i].replace(' ', '').replace('comment', 'endcomment')
-                    while tokens[i].replace(' ', '') != tokens_i_end:
-                        i += 1
-                
-                elif words[0] == 'cycle':
-                    line_number = add_line('#')
-                    add_line(f'NanoJekyllResult.append(self.cycle(line_number = {line_number}, cycle_cache = cycle_cache, vals = ( ' + ' '.join(words[1:]) + ') ))')
-    
-                elif words[0] == 'highlight':
-                    lang = ''.join(words[1:])
-                    add_line(f'NanoJekyllResult.append("\\n```{lang}\\n")')
-                    tokens_i_end = '{%endhighlight%}'
-                    i += 1
-                    while tokens[i].replace(' ', '') != tokens_i_end:
-                        add_line('NanoJekyllResult.append(' + repr(tokens[i]) + ')')
-                        i += 1
-                    add_line('NanoJekyllResult.append("\\n```\\n")')
-                
-                elif words[0] == 'unless':
-                    if 'contains' in words:
-                        assert len(words) == 4 and words[2] == 'contains'
-                        words = [words[0], words[3], 'in', words[1]]
-                    add_line("if not( {} ):".format(' '.join(words[1:])))
-                    indent_level += 1
-
-                elif words[0] == 'if':
-                    if 'contains' in words:
-                        assert len(words) == 4 and words[2] == 'contains'
-                        words = [words[0], words[3], 'in', words[1]]
-                    add_line("if {}:".format(' '.join(words[1:])))
-                    indent_level += 1
-                
-                elif words[0] == 'elsif':
-                    indent_level -= 1
-                    add_line("elif {}:".format(' '.join(words[1:])))
-                    indent_level += 1
-                
-                elif words[0] == 'else':
-                    indent_level -= 1
-                    add_line("else:".format(' '.join(words[1:])))
-                    indent_level += 1
-                
-                elif words[0] == 'for':
-                    # https://shopify.dev/docs/api/liquid/objects/forloop
-                    assert len(words) in [4, 6] and words[2] == 'in', f'Dont understand for: {token=}'
-
-                    forloop_cnt = add_line('#')
-                    add_line('forloop_{} = list({})'.format(forloop_cnt, NanoJekyllContext.expr_code(words[3])))
-                    if len(words) == 6 and words[4] == 'limit:':
-                        add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(forloop_cnt, NanoJekyllContext.expr_code(words[5])))
-                    add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], forloop_cnt))
-                    indent_level += 1
-                    add_line('forloop.index, forloop.rindex, forloop.rindex0, forloop.first, forloop.last, forloop.length = forloop.index0 + 1, len(forloop_{0}) - forloop.index0, len(forloop_{0}) - forloop.index0 - 1, forloop.index0 == 0, forloop.index0 == len(forloop_{0}) - 1, len(forloop_{0})'.format(forloop_cnt))
-                
-                elif words[0].startswith('end'):
-                    indent_level -= 1
-
-                elif words[0] == 'include':
-                    template_name = words[1]
-                    beg = None
-                    if len(words) > 2 and '=' in words:
-                        beg = ([k for k, w in enumerate(words) if w == '='] or [0])[0] - 1
-                        add_line('include=' +  NanoJekyllContext.__name__ + '(dict(' + ', '.join(words[k] + words[k + 1] + words[k + 2] for k in range(beg, len(words), 3)) + '))')
-                    template_name = ' '.join(words[1:beg])
-
-                    if '{{' not in template_name and '}}' not in template_name:
-                        frontmatter_include, template_include = includes[template_name]
-                        tokens = tokens[:i + 1] + split_tokens(template_include) + tokens[i + 1:]
-                    else:
-                        template_name = ' '.join(words[1:]).replace('{{', '{').replace('}}', '}')
-                        template_name = 'f' + repr(template_name)
-                        add_line('include_name = ' + template_name)
-                        add_line('NanoJekyllResult.append(self.includes[include_name][-1])')
-                
-                elif words[0] == 'assign':
-                    assert words[2] == '='
-                    expr = NanoJekyllContext.expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
-                    var_name = words[1]
-                    add_line('{} = {}'.format(var_name, expr))
-
-                elif words[0] in plugins: 
-                    template_name = words[0]
-                    add_line(f'assert bool(self.render_plugin_{template_name}); tmp = self.render_plugin_{template_name}(); (NanoJekyllResult.extend if isinstance(tmp, list) else NanoJekyllResult.append)(tmp)')
-                else:
-                    assert False, ('Dont understand tag: ' + words[0])
-
-            else:
-                if token:
-                    add_line("NanoJekyllResult.append({})".format(repr(token)))
-            
-            if e == -3:
-                add_line('NanoJekyllResult.append(self.NanoJekyllTrimRight())')
-            i += 1
-
-        add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
-        return ''.join(code)
 
     @staticmethod
     def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
