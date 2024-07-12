@@ -149,7 +149,7 @@ class NanoJekyllTemplate:
         self.forloop_cnt = 0
         self.add_line(f'def render_{function_name}(self):')
         self.indent_level += 1
-        self.add_line('''nil, empty, false, true, forloop, NanoJekyllResult = None, None, False, True, self.forloop, []''')
+        self.add_line('''nil, empty, false, true, forloop, NanoJekyllResult, cycle_cache = None, None, False, True, self.forloop, [], {}''')
 
         filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
         self.add_line('( ' + ', '.join(filters_names        ) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in filters_names) + ' )')
@@ -186,7 +186,8 @@ class NanoJekyllTemplate:
                         i += 1
                 
                 elif words[0] == 'cycle':
-                    self.add_line('# ' + ' '.join(words))
+                    line_number = self.add_line('#')
+                    self.add_line(f'NanoJekyllResult.append(self.cycle(line_number = {line_number}, cycle_cache = cycle_cache, vals = ( ' + ' '.join(words[1:]) + ') ))')
     
                 elif words[0] == 'highlight':
                     lang = ''.join(words[1:])
@@ -325,6 +326,7 @@ class NanoJekyllTemplate:
 
     def add_line(self, line = ''):
         self.code.extend([' ' * 4 * self.indent_level, line, "\n"])
+        return len(self.code)
 
 class NanoJekyllContext:
     class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1
@@ -422,6 +424,15 @@ class NanoJekyllContext:
     @staticmethod
     def pipify(f):
         return (lambda *args: (f, *args))
+
+    @staticmethod
+    def cycle(line_number, cycle_cache = {}, vals = ()):
+        if not vals:
+            return ''
+        if line_number not in cycle_cache:
+            cycle_cache[line_number] = -1
+        cycle_cache[line_number] = (cycle_cache[line_number] + 1) % len(vals)
+        return str(vals[cycle_cache[line_number]])
         
     @staticmethod
     def NanoJekyllResultFinalize(result):
@@ -771,29 +782,32 @@ class NanoJekyllContext:
     @staticmethod
     def _date_to_xmlschema_(dt):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
+        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L49
         
         #Date to XML Schema
         #Convert a Date into XML Schema (ISO 8601) format.
         #{{ site.time | date_to_xmlschema }}
         #2008-11-07T13:07:54-08:00
         
-        return str(dt) if dt else ''
+        return dt.isoformat(timespec='seconds') if dt else ''
     
     
     @staticmethod
     def _date_to_rfc822_(dt):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-rfc-822-format
+        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L65
         
         #Date to RFC-822 Format
         #Convert a Date into the RFC-822 format used for RSS feeds.
         #{{ site.time | date_to_rfc822 }}
         #Mon, 07 Nov 2008 13:07:54 -0800
 
-        return str(dt) if dt else ''
+        return datetime.datetime.strftime(dt, '%a, %d %b %Y %H:%M:%S %z') if dt else ''
     
     @staticmethod
     def _date_to_string_(dt, y = 'ordinal', z = 'US'):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-string
+        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L18
         
         #Date to String
         #Convert a date to short format.
@@ -804,11 +818,12 @@ class NanoJekyllContext:
         #{{ site.time | date_to_string: "ordinal", "US" }}
         #Nov 7th, 2008
         
-        return str(dt) if dt else ''
+        return datetime.datetime.strftime(dt, '%d %b %Y') if dt else ''
     
-    @staticmethvalued
+    @staticmethod
     def _date_to_long_string_(dt, y = 'ordinal', z = 'US'):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-long-string
+        # https://github.com/jekyll/jekyll/blob/60a9cd73569552b858e807cbd3c0e23455023cbc/lib/jekyll/filters/date_filters.rb#L33
         
         #Date to Long String
         #Format a date to long format.
@@ -941,7 +956,7 @@ class NanoJekyllContext:
         if not x:
             return 0
         if mode in ['cjk', 'auto']:
-            return len(re.findall(r'[\u4e00-\u9FFF]|[\u3040-\u30ff]|[\uac00-\ud7a3]' str(x)))
+            return len(re.findall(r'[\u4e00-\u9FFF]|[\u3040-\u30ff]|[\uac00-\ud7a3]', str(x)))
         return len(str(x).split())
 
     @staticmethod
