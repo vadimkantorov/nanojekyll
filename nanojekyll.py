@@ -146,10 +146,10 @@ class NanoJekyllTemplate:
         # https://shopify.github.io/liquid/tags/iteration/#forloop-object
 
         function_name = NanoJekyllContext.sanitize_template_name(template_name)
-        self.forloop_cnt = 0
         self.add_line(f'def render_{function_name}(self):')
         self.indent_level += 1
-        self.add_line('''nil, empty, false, true, forloop, NanoJekyllResult, cycle_cache = None, None, False, True, self.forloop, [], {}''')
+        self.add_line('nil, empty, false, true, NanoJekyllResult, cycle_cache = None, None, False, True, [], {}')
+        self.add_line('class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1')
 
         filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
         self.add_line('( ' + ', '.join(filters_names        ) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in filters_names) + ' )')
@@ -231,13 +231,13 @@ class NanoJekyllTemplate:
                     assert len(words) in [4, 6] and words[2] == 'in', f'Dont understand for: {token=}'
 
                     ops_stack.append('for')
-                    self.add_line('forloop_{} = list({})'.format(self.forloop_cnt, self._expr_code(words[3])))
+                    forloop_cnt = self.add_line('#')
+                    self.add_line('forloop_{} = list({})'.format(forloop_cnt, self._expr_code(words[3])))
                     if len(words) == 6 and words[4] == 'limit:':
-                        self.add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(self.forloop_cnt, self._expr_code(words[5])))
-                    self.add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], self.forloop_cnt))
+                        self.add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(forloop_cnt, self._expr_code(words[5])))
+                    self.add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], forloop_cnt))
                     self.indent_level += 1
-                    self.add_line('forloop.index, forloop.rindex, forloop.rindex0, forloop.first, forloop.last, forloop.length = forloop.index0 + 1, len(forloop_{0}) - forloop.index0, len(forloop_{0}) - forloop.index0 - 1, forloop.index0 == 0, forloop.index0 == len(forloop_{0}) - 1, len(forloop_{0})'.format(self.forloop_cnt))
-                    self.forloop_cnt += 1
+                    self.add_line('forloop.index, forloop.rindex, forloop.rindex0, forloop.first, forloop.last, forloop.length = forloop.index0 + 1, len(forloop_{0}) - forloop.index0, len(forloop_{0}) - forloop.index0 - 1, forloop.index0 == 0, forloop.index0 == len(forloop_{0}) - 1, len(forloop_{0})'.format(forloop_cnt))
                 
                 elif words[0].startswith('end'):
                     # Endsomething.  Pop the ops stack.
@@ -329,7 +329,6 @@ class NanoJekyllTemplate:
         return len(self.code)
 
 class NanoJekyllContext:
-    class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1
     class NanoJekyllTrimLeft(str): pass
     class NanoJekyllTrimRight(str): pass
     
