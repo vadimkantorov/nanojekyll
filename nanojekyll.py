@@ -133,7 +133,7 @@ class NanoJekyllContext:
                     
                     elif words[0] == 'assign':
                         assert words[2] == '='
-                        expr = NanoJekyllContext.expr_code(token_inner.split('=', maxsplit = 1)[1].strip())
+                        expr = NanoJekyllContext.expr_code(token_inner.split('=', maxsplit = 1)[1].strip(), wrap_literal = True)
                         var_name = words[1]
                         add_line('{} = {}'.format(var_name, expr))
 
@@ -405,11 +405,11 @@ class NanoJekyllContext:
         return os.path.splitext(os.path.basename(template_name))[0].translate(translate)
     
     @staticmethod
-    def expr_code(expr):
+    def expr_code(expr, wrap_literal = False):
         is_string_literal = lambda expr: (expr.startswith('"') and expr.endswith('"') and expr[1:-1].count('"') == 0) or (expr.startswith("'") and expr.endswith("'") and expr[1:-1].count("'") == 0)
         expr = expr.strip()
         if is_string_literal(expr):
-             code = expr
+             code = (NanoJekyllContext.__name__ + '(' + expr + ')') if wrap_literal else expr
         elif '|' in expr:
             pipes = list(map(str.strip, expr.split('|')))
             i = 0
@@ -434,7 +434,7 @@ class NanoJekyllContext:
     def render(self, template_name = '', is_plugin = False):
         fn_name = ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name or 'default')
         fn = getattr(self, fn_name, None)
-        assert fn is not None and not isinstance(fn, NanoJekyllContext)
+        assert fn is not None and not isinstance(fn, NanoJekyllContext), f'{fn_name} not found in self'
         return fn()
     
     @property
@@ -538,12 +538,12 @@ class NanoJekyllContext:
     @staticmethod
     def _join_(xs, sep = ''):
         # https://shopify.github.io/liquid/filters/join/
-        return sep.join(str(x) for x in xs) if xs else ''
+        return str(sep).join(str(x) for x in xs) if xs else ''
 
     @staticmethod
     def _split_(xs, sep = ''):
         # https://shopify.github.io/liquid/filters/split/
-        return xs.split(sep) if xs and sep in xs else []
+        return xs.split(str(sep)) if xs and sep else []
 
     @staticmethod
     def _concat_(xs, ys = []):
@@ -616,7 +616,7 @@ class NanoJekyllContext:
     @staticmethod
     def _replace_(x, y, z = ''):
         # https://shopify.github.io/liquid/filters/replace/
-        return str(x).replace(y or '', z or '') if x else ''
+        return str(x).replace(str(y or ''), str(z or '')) if x else ''
     
     @staticmethod
     def _replace_first_(x, y, z = ''):
