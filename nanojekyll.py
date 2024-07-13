@@ -6,21 +6,28 @@ class NanoJekyllContext:
         # https://shopify.dev/docs/api/liquid/filters/escape
         # https://jekyllrb.com/docs/liquid/filters/
         self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllContext) else ctx
-        if not templates:
-            return
-
-        #template_code = template_code or getattr(self, 'template_code', '')
-        indent_level = 1
-        self.ctx  = 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse\n\n'
-        self.ctx += inspect.getsource(NanoJekyllContext) + '\n'
-        self.ctx += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + '\n'
-        
-        #self.ctx += '\n'.join(codegen_single_template(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins)) for template_name, template_code in templates.items()) + '\n'
-        #python_source += '\n'.join(''.join(Plugin(template_name = 'plugin_' + plugin_name, includes = includes, global_variables = global_variables, indent_level = indent_level).code) for plugin_name, Plugin in plugins.items()) + '\n'
-        
         def add_line(line = ''):
             self.ctx += ' ' * 4 * indent_level + line + '\n'
             return len(self.ctx)
+        
+        
+        template_code = template_code or getattr(self, 'template_code', '')
+        
+        if (not templates) and (not template_code):
+            return
+
+        self.ctx = ''
+
+        if templates:
+            indent_level = 1
+            self.ctx += 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse\n\n'
+            self.ctx += inspect.getsource(NanoJekyllContext) + '\n'
+            self.ctx += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + '\n\n'
+        
+            self.ctx += '\n'.join(str(Plugin(template_name = 'plugin_' + plugin_name, includes = includes, global_variables = global_variables, indent_level = indent_level)) for plugin_name, Plugin in plugins.items()) + '\n'
+        else:
+            templates = {(template_name or 'default') : template_code}
+
         
         for template_name, template_code in templates.items():
             split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
@@ -152,7 +159,8 @@ class NanoJekyllContext:
                     add_line('NanoJekyllResult.append(self.NanoJekyllTrimRight())')
                 i += 1
 
-            add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
+            add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)\n\n')
+            indent_level -= 1
 
     @staticmethod
     def load_class(python_source):
@@ -346,6 +354,8 @@ class NanoJekyllContext:
         if isinstance(self.ctx, dict):
             if other in self.ctx:
                 return NanoJekyllContext(self.ctx[other])
+        if other == 'template_code':
+            return self.__getattribute__(other)
         return NanoJekyllContext(getattr(self.ctx, other, None))
     
     def __getitem__(self, other):
@@ -426,7 +436,8 @@ class NanoJekyllContext:
         return code
 
     def render(self, template_name = '', is_plugin = False):
-        fn = getattr(self, ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name or 'default'), None)
+        fn_name = ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name or 'default')
+        fn = getattr(self, fn_name, None)
         assert fn is not None and not isinstance(fn, NanoJekyllContext)
         return fn()
     
