@@ -303,15 +303,19 @@ class NanoJekyllContext:
         return int(self.ctx)
 
     def __abs__(self):
+        # FIXME
         return abs(self.ctx) if isinstance(self.ctx, int | float) else 0 if (not self.ctx or not isinstance(self.ctx, str | int | float)) else abs(int(self.ctx)) if (self.ctx and isinstance(self.ctx, str) and self.ctx[1:].isigit() and (self.ctx[0].isdigit() or self.ctx[0] == '-')) else abs(float(self.ctx))
     
     def __round__(self):
+        # FIXME
         return round(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
     
     def __floor__(self):
+        # FIXME
         return math.floor(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
     
     def __ceil__(self):
+        # FIXME
         return math.ceil(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
 
     def __mul__(self, other):
@@ -328,19 +332,19 @@ class NanoJekyllContext:
 
     def __gt__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
-        return self.ctx > other
+        return (self.ctx > other) if (self.ctx is not None and other is not None) else (False if self.ctx is not None else True)
 
     def __ge__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
-        return self.ctx >= other
+        return (self.ctx >= other) if (self.ctx is not None and other is not None) else (False if self.ctx is not None else True)
 
     def __lt__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
-        return (self.ctx < other) if self.ctx and other else True if self.ctx else False
+        return (self.ctx < other) if (self.ctx is not None and other is not None) else (True if self.ctx is not None else False)
 
     def __le__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
-        return self.ctx <= other
+        return (self.ctx <= other) if (self.ctx is not None and other is not None) else (True if self.ctx is not None else False)
 
     def __eq__(self, other):
         other = other.ctx if isinstance(other, NanoJekyllContext) else other
@@ -351,24 +355,24 @@ class NanoJekyllContext:
         return self.ctx != other
         
     def __getattr__(self, other):
+        if other in ['template_code', 'ctx']:
+            return self.__getattribute__(other)
         if isinstance(self.ctx, dict):
             if other in self.ctx:
                 return NanoJekyllContext(self.ctx[other])
-        if other == 'template_code':
-            return self.__getattribute__(other)
         return NanoJekyllContext(getattr(self.ctx, other, None))
     
     def __getitem__(self, other):
         if not self.ctx:
             return NanoJekyllContext(None)
-        if isinstance(self.ctx, (list, tuple, str)):
+        if isinstance(self.ctx, list | tuple | str):
             return NanoJekyllContext(self.ctx[int(other)])
         if isinstance(self.ctx, dict):
             return NanoJekyllContext(self.ctx.get(str(other)))
         return NanoJekyllContext(None)
 
     def __len__(self):
-        return len(self.ctx) if isinstance(self.ctx, (list, dict, str)) else None
+        return len(self.ctx) if isinstance(self.ctx, list | dict | str) else None
 
     def __iter__(self):
         yield from (map(NanoJekyllContext, self.ctx) if self.ctx else [])
@@ -457,16 +461,19 @@ class NanoJekyllContext:
     @staticmethod
     def _at_least_(x):
         # https://shopify.github.io/liquid/filters/at_least/
+        # FIXME
         return min(self.ctx, x) if isinstance(self.ctx, int | float) else float(x or 0)
     
     @staticmethod
     def _at_most_(x):
         # https://shopify.github.io/liquid/filters/at_most/
+        # FIXME
         return max(self.ctx, x) if isinstance(self.ctx, int | float) else float(x or 0)
     
     @staticmethod
     def _divided_by_(x, y = 1):
         # https://shopify.github.io/liquid/filters/divided_by/
+        # FIXME
         return (x // y) if isinstance(y, int) else (x / y) if isinstance(y, float) else 0
     
     @staticmethod
