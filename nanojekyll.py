@@ -83,18 +83,11 @@ class NanoJekyllContext:
                             i += 1
                         add_line('NanoJekyllResult.append("\\n```\\n")')
                     
-                    elif words[0] == 'unless':
-                        if 'contains' in words:
-                            assert len(words) == 4 and words[2] == 'contains'
-                            words = [words[0], words[3], 'in', words[1]]
-                        add_line("if not( {} ):".format(' '.join(words[1:])))
-                        indent_level += 1
-
-                    elif words[0] == 'if':
-                        if 'contains' in words:
-                            assert len(words) == 4 and words[2] == 'contains'
-                            words = [words[0], words[3], 'in', words[1]]
-                        add_line("if {}:".format(' '.join(words[1:])))
+                    elif words[0] == 'if' or words[0] == 'unless':
+                        for k in range(len(words)):
+                            if words[k] == 'contains':
+                                words[k - 1], words[k], words[k + 1] = words[k + 1], 'in', words[k - 1]
+                        add_line(("if {}:" if words[0] == 'if' else "if not( {} ):").format(' '.join(words[1:])))
                         indent_level += 1
                     
                     elif words[0] == 'elsif':
@@ -109,11 +102,10 @@ class NanoJekyllContext:
                     
                     elif words[0] == 'for':
                         # https://shopify.dev/docs/api/liquid/objects/forloop
-                        assert len(words) in [4, 6] and words[2] == 'in', f'Dont understand for: {token=}'
-
                         forloop_cnt = add_line('#')
                         add_line('forloop_{} = list({})'.format(forloop_cnt, NanoJekyllContext.expr_code(words[3])))
-                        if len(words) == 6 and words[4] == 'limit:':
+                        if len(words) >= 5 and words[4].startswith('limit:'):
+                            if words[4] != 'limit:': words = words[:4] + ['limit:', words[4].split(':', maxsplit = 1)[-1]]
                             add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(forloop_cnt, NanoJekyllContext.expr_code(words[5])))
                         add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], forloop_cnt))
                         indent_level += 1
