@@ -9,7 +9,7 @@ import nanojekyll
 markdown_extensions = ['meta', 'tables', 'toc']
 
 def read_template(path, render = True):
-    frontmatter, content = nanojekyll.NanoJekyllTemplate.read_template(path)
+    frontmatter, content = nanojekyll.NanoJekyllContext.read_template(path)
     if path.endswith('.md') and render:
         content = markdown.markdown(content, extensions = markdown_extensions)
     return frontmatter, content
@@ -22,10 +22,11 @@ def render(cls, ctx = {}, content = '', template_name = '', templates = {}):
         template_name = frontmatter.get('layout')
     return content
 
-def get_page_date(page_path, date_template = '0000-00-00'):
+def get_page_date(page_path, date_template = '0000-00-00', str = False):
     page_name = os.path.basename(page_path)
     if len(page_name) >= len(date_template) and page_name[:4].isdigit() and page_name[5:7].isdigit() and page_name[8:10].isdigit() and page_name[4] == page_name[7] == '-':
-        return page_name[:len(date_template)]
+        page_date_str = page_name[:len(date_template)]
+        return datetime.datetime.strptime(page_date_str, '%Y-%m-%d') if str is False else page_date_str
     return ''
 
 def build_context(config, siteurl = '', baseurl = '', dynamic_assets = {}, pages = {}, posts = {}):
@@ -34,7 +35,7 @@ def build_context(config, siteurl = '', baseurl = '', dynamic_assets = {}, pages
         url = siteurl,
         baseurl = baseurl,
         feed = dict(path = 'feed.xml', excerpt_only = False),
-        time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        time = datetime.datetime.now().astimezone(),
         header_pages = ctx['site'].get('header_pages', []) or [k for k in pages if not k.startswith('404.') and not k.startswith('index.')]
     ))
 
@@ -42,7 +43,7 @@ def build_context(config, siteurl = '', baseurl = '', dynamic_assets = {}, pages
     for input_path, output_path in list(dynamic_assets.items()) + list(pages.items()) + list(posts.items()):
         frontmatter, content = read_template(input_path, render = False)
         content_lines = content.strip().splitlines()
-        title_from_id = os.path.splitext(os.path.basename(input_path))[0].removeprefix(get_page_date(input_path)).strip('-').strip('_').replace('-', ' ').replace('_', ' ').title()
+        title_from_id = os.path.splitext(os.path.basename(input_path))[0].removeprefix(get_page_date(input_path, str = True)).strip('-').strip('_').replace('-', ' ').replace('_', ' ').title()
         title_from_content = content_lines[0].removeprefix('### ').removeprefix('## ').removeprefix('# ').strip() if content_lines and (content_lines[0].startswith('### ') or content_lines[0].startswith('## ') or content_lines[0].startswith('# ')) else ''
         
         ctx['page'] = dict(
@@ -112,7 +113,7 @@ def main(
 
     #####################################
 
-    config = nanojekyll.yaml_loads(open(config_yml).read())
+    config = nanojekyll.NanoJekyllContext.yaml_loads(open(config_yml).read())
     ctx = build_context(config, siteurl = siteurl, baseurl = baseurl, dynamic_assets = dynamic_assets, pages = pages, posts = posts)
 
 
@@ -124,11 +125,12 @@ def main(
     templates_posts = {input_path: read_template(input_path) for input_path in posts}
     templates_assets = {input_path : read_template(input_path) for input_path in dynamic_assets}
 
-    templates_all = (templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets)
-    cls, python_source = nanojekyll.NanoJekyllTemplate.codegen({k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml})
+    templates_all = templates_includes | templates_layouts | templates_pages | templates_posts | templates_assets
+    python_source = str(nanojekyll.NanoJekyllContext(templates = {k : v[1] for k, v in templates_all.items()}, includes = templates_includes | icons, global_variables = global_variables, plugins = {'seo': nanojekyll.NanoJekyllPluginSeo, 'feed_meta' : nanojekyll.NanoJekyllPluginFeedMeta, 'feed_meta_xml' : nanojekyll.NanoJekyllPluginFeedMetaXml}))
     with open(codegen_py, 'w') as f:
         f.write(python_source)
-    #cls = __import__('nanojekyllcodegen').NanoJekyllContext
+    #cls = nanojekyll.NanoJekyllContext.load_class(python_source)
+    cls = __import__('nanojekyllcodegen').NanoJekyllContext
     print(codegen_py)
 
     assert cls
