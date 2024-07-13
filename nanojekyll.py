@@ -1,18 +1,28 @@
 import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse
 
 class NanoJekyllContext:
-    def __init__(self, ctx = None):
+    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', includes = {}, global_variables = [], plugins = {}, indent_level = 0):
         # https://shopify.github.io/liquid/basics/operators/
         # https://shopify.dev/docs/api/liquid/filters/escape
         # https://jekyllrb.com/docs/liquid/filters/
         self.ctx = ctx.ctx if isinstance(ctx, NanoJekyllContext) else ctx
-    
-    @staticmethod
-    def codegen(templates, includes = {}, global_variables = [], plugins = {}, newline = '\n'):
-        def codegen_single_template(template_name = '', template_code = '', includes = {}, global_variables = [], plugins = [], indent_level = 0, code = []):
-            add_line = lambda line = '': code.extend([' ' * 4 * indent_level, line, "\n"]) or len(code)
+        if not templates:
+            return
+
+        #template_code = template_code or getattr(self, 'template_code', '')
+        indent_level = 1
+        self.ctx  = 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse\n\n'
+        self.ctx += inspect.getsource(NanoJekyllContext) + '\n'
+        self.ctx += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + '\n'
         
-            template_code = template_code or getattr(self, 'template_code', '')
+        #self.ctx += '\n'.join(codegen_single_template(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins)) for template_name, template_code in templates.items()) + '\n'
+        #python_source += '\n'.join(''.join(Plugin(template_name = 'plugin_' + plugin_name, includes = includes, global_variables = global_variables, indent_level = indent_level).code) for plugin_name, Plugin in plugins.items()) + '\n'
+        
+        def add_line(line = ''):
+            self.ctx += ' ' * 4 * indent_level + line + '\n'
+            return len(self.ctx)
+        
+        for template_name, template_code in templates.items():
             split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
             function_name = NanoJekyllContext.sanitize_template_name(template_name)
             filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
@@ -143,15 +153,9 @@ class NanoJekyllContext:
                 i += 1
 
             add_line('return self.NanoJekyllResultFinalize(NanoJekyllResult)')
-            return ''.join(code)
-        
-        templates = templates if isinstance(templates, dict) else dict(default = templates)
-        indent_level = 1
-        python_source  = 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse' + newline
-        python_source += inspect.getsource(NanoJekyllContext) + newline
-        python_source += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + newline
-        python_source += newline.join(codegen_single_template(template_name = template_name, template_code = template_code, includes = includes, global_variables = global_variables, indent_level = indent_level, plugins = list(plugins)) for template_name, template_code in templates.items()) + newline
-        python_source += newline.join(''.join(Plugin(template_name = 'plugin_' + plugin_name, includes = includes, global_variables = global_variables, indent_level = indent_level).code) for plugin_name, Plugin in plugins.items()) + newline
+
+    @staticmethod
+    def load_class(python_source):
         try:
             global_namespace = {}
             exec(python_source, global_namespace)
@@ -159,7 +163,7 @@ class NanoJekyllContext:
         except Exception as e:
             print(e)
             cls = None
-        return cls, python_source
+        return cls
 
     @staticmethod
     def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
