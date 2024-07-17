@@ -295,55 +295,60 @@ class NanoJekyllContext:
         return int(self.ctx)
 
     def __abs__(self):
-        # FIXME
-        return abs(self.ctx) if isinstance(self.ctx, int | float) else 0 if (not self.ctx or not isinstance(self.ctx, str | int | float)) else abs(int(self.ctx)) if (self.ctx and isinstance(self.ctx, str) and self.ctx[1:].isigit() and (self.ctx[0].isdigit() or self.ctx[0] == '-')) else abs(float(self.ctx))
+        is_str_int_float = isinstance(self.ctx, str | int | float)
+        is_int_float = isinstance(self.ctx, int | float)
+        return abs(self.ctx) if is_int_float else 0 if (not self.ctx or not is_str_int_float) else abs(int(self.ctx)) if (self.ctx and isinstance(self.ctx, str) and self.ctx[1:].isigit() and (self.ctx[0].isdigit() or self.ctx[0] == '-')) else abs(float(self.ctx))
     
     def __round__(self):
-        # FIXME
-        return round(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
+        is_str_int_float = isinstance(self.ctx, str | int | float)
+        return round(float(self.ctx) if self.ctx and is_str_int_float else 0)
     
     def __floor__(self):
-        # FIXME
-        return math.floor(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
+        is_str_int_float = isinstance(self.ctx, str | int | float)
+        return math.floor(float(self.ctx) if self.ctx and is_str_int_float else 0)
     
     def __ceil__(self):
-        # FIXME
-        return math.ceil(float(self.ctx) if self.ctx and isinstance(self.ctx, str | int | float) else 0)
+        is_str_int_float = isinstance(self.ctx, str | int | float)
+        return math.ceil(float(self.ctx) if self.ctx and is_str_int_float else 0)
 
     def __mul__(self, other):
+        other = self.unwrap(other)
         return NanoJekyllContext(self.ctx * other)
     
     def __truediv__(self, other):
+        other = self.unwrap(other)
         return NanoJekyllContext((self.ctx or 0) / other)
     
     def __floordiv__(self, other):
+        other = self.unwrap(other)
         return NanoJekyllContext(math.floor((self.ctx or 0) // other))
     
     def __mod__(self, other):
+        other = self.unwrap(other)
         return NanoJekyllContext((self.ctx or 0) % other)
 
     def __gt__(self, other):
-        other = other.ctx if isinstance(other, NanoJekyllContext) else other
+        other = self.unwrap(other)
         return (self.ctx > other) if (self.ctx is not None and other is not None) else (False if self.ctx is not None else True)
 
     def __ge__(self, other):
-        other = other.ctx if isinstance(other, NanoJekyllContext) else other
+        other = self.unwrap(other)
         return (self.ctx >= other) if (self.ctx is not None and other is not None) else (False if self.ctx is not None else True)
 
     def __lt__(self, other):
-        other = other.ctx if isinstance(other, NanoJekyllContext) else other
+        other = self.unwrap(other)
         return (self.ctx < other) if (self.ctx is not None and other is not None) else (True if self.ctx is not None else False)
 
     def __le__(self, other):
-        other = other.ctx if isinstance(other, NanoJekyllContext) else other
+        other = self.unwrap(other)
         return (self.ctx <= other) if (self.ctx is not None and other is not None) else (True if self.ctx is not None else False)
 
     def __eq__(self, other):
-        other = other.ctx if isinstance(other, NanoJekyllContext) else other
+        other = self.unwrap(other)
         return self.ctx == other
 
     def __ne__(self, other):
-        other = other.ctx if isinstance(other, NanoJekyllContext) else other
+        other = self.unwrap(other)
         return self.ctx != other
         
     def __getattr__(self, other):
@@ -368,6 +373,14 @@ class NanoJekyllContext:
 
     def __iter__(self):
         yield from (map(NanoJekyllContext, self.ctx) if self.ctx else [])
+    
+    @staticmethod
+    def sanitize_template_name(template_name, translate = {ord('/') : '_', ord('-'): '_', ord('.') : '_'}):
+        return os.path.splitext(os.path.basename(template_name))[0].translate(translate)
+    
+    @staticmethod
+    def unwrap(x):
+        return x.ctx if hasattr(x, 'ctx') else x
 
     @staticmethod
     def pipify(f):
@@ -399,10 +412,6 @@ class NanoJekyllContext:
                     res += s
                     trimming = False
         return res
-    
-    @staticmethod
-    def sanitize_template_name(template_name, translate = {ord('/') : '_', ord('-'): '_', ord('.') : '_'}):
-        return os.path.splitext(os.path.basename(template_name))[0].translate(translate)
     
     @staticmethod
     def expr_code(expr, wrap_literal = False):
@@ -449,23 +458,20 @@ class NanoJekyllContext:
     def size(self):
         return NanoJekyllContext(self._size_(self))
     
-    
     @staticmethod
-    def _at_least_(x):
+    def _at_least_(x, y):
         # https://shopify.github.io/liquid/filters/at_least/
-        # FIXME
-        return min(self.ctx, x) if isinstance(self.ctx, int | float) else float(x or 0)
+        return min(NanoJekyllContext.unwrap(x), NanoJekyllContext.unwrap(y))
     
     @staticmethod
-    def _at_most_(x):
+    def _at_most_(x, y):
         # https://shopify.github.io/liquid/filters/at_most/
-        # FIXME
-        return max(self.ctx, x) if isinstance(self.ctx, int | float) else float(x or 0)
+        return max(NanoJekyllContext.unwrap(x), NanoJekyllContext.unwrap(y))
     
     @staticmethod
     def _divided_by_(x, y = 1):
         # https://shopify.github.io/liquid/filters/divided_by/
-        # FIXME
+        y = NanoJekyllContext.unwrap(y)
         return (x // y) if isinstance(y, int) else (x / y) if isinstance(y, float) else 0
     
     @staticmethod
@@ -781,7 +787,7 @@ class NanoJekyllContext:
     @staticmethod
     def _where_exp_(xs, key, value):
         # https://jekyllrb.com/docs/liquid/filters/#where-expression
-        expr = eval(f'lambda {key}: {value}', dict(nil = None, false = False, true = True))
+        expr = eval(f'lambda {key}: ' + NanoJekyllContext.expr_code(value), dict(nil = None, false = False, true = True))
         return [x for x in xs if expr(NanoJekyllContext(x))] if xs else []
 
     @staticmethod
@@ -805,7 +811,7 @@ class NanoJekyllContext:
     @staticmethod
     def _group_by_exp_(xs, key, value):
         # https://jekyllrb.com/docs/liquid/filters/#group-by-expression
-        expr_ = eval(f'lambda {key}: {value}', dict(nil = None, false = False, true = True))
+        expr_ = eval(f'lambda {key}: ' + NanoJekyllContext.expr_code(value), dict(nil = None, false = False, true = True))
         expr = lambda item: expr_(NanoJekyllContext(item))
         return [dict(name = k, items = list(g)) for k, g in itertools.groupby(sorted(xs, key = expr), key = expr)]
     
