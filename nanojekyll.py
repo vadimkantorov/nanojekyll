@@ -1,7 +1,7 @@
 import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse
 
 class NanoJekyllContext:
-    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', includes = {}, global_variables = [], plugins = {}, indent_level = 0):
+    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', includes = {}, global_variables = [], extra_filters = {}, plugins = {}, indent_level = 0):
         # https://shopify.github.io/liquid/basics/operators/
         # https://shopify.dev/docs/api/liquid/filters/escape
         # https://jekyllrb.com/docs/liquid/filters/
@@ -32,7 +32,7 @@ class NanoJekyllContext:
         for template_name, template_code in templates.items():
             split_tokens = lambda s: re.split(r"(?s)({{.*?}}|{%.*?%}|{#.*?#})", s)
             function_name = NanoJekyllContext.sanitize_template_name(template_name)
-            filters_names = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
+            builtin_filters = [k for k in dir(NanoJekyllContext) if (k.startswith('_') and not k.startswith('__')) and (k.endswith('_') and not k.endswith('__'))]
             tokens = split_tokens(template_code)
             
             # https://shopify.github.io/liquid/tags/iteration/#forloop-object
@@ -40,7 +40,8 @@ class NanoJekyllContext:
             indent_level += 1
             add_line('nil, empty, false, true, NanoJekyllResult, cycle_cache = None, None, False, True, [], {}')
             add_line('class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1')
-            add_line('( ' + ', '.join(filters_names        ) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in filters_names) + ' )')
+            add_line('( ' + ', '.join(builtin_filters) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in builtin_filters) + ' )')
+            add_line('( ' + ', '.join(extra_filters       ) +' ) = ( ' + ', '.join(f'self.pipify(extra_filters{k})' for k in extra_filters) + ' )')
             add_line('( ' + ', '.join(global_variables) +' ) = ( ' + ', '.join(NanoJekyllContext.__name__ + f'(self.ctx.get({k!r}))' for k in global_variables) + ' )')
             
             i = 0
@@ -713,37 +714,39 @@ class NanoJekyllContext:
         return str(x).upper() if x else ''
    
     @staticmethod
-    def _now_():
+    def parse_datetime_or_now(dt = None, date_formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d', '%d/%m/%Y H:%M:%S', '%d/%m/%Y']):
+        if not dt:
+            return datetime.datetime.now().astimezone()
+        for date_format in date_formats:
+            try:
+                return datetime.datetime.strptime(str(dt or ''), date_format)
+            except:
+                continue
         return datetime.datetime.now().astimezone()
     
     @staticmethod
     def _date_(dt = None, date_format = '%Y-%m-%d %H:%M:%S'):
         # https://shopify.github.io/liquid/filters/date/
-        if not dt: dt = NanoJekyllContext._now_()
+        dt = NanoJekyllContext.parse_datetime_or_now(dt)
         return str(dt)
-        #return dt.strftime(date_format)
-
     
     @staticmethod
     def _date_to_xmlschema_(dt = None):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-xml-schema
-        if not dt: dt = NanoJekyllContext._now_()
-        
+        dt = NanoJekyllContext.parse_datetime_or_now(dt)
         return dt.isoformat(timespec = 'seconds')
     
     
     @staticmethod
     def _date_to_rfc822_(dt = None):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-rfc-822-format
-        if not dt: dt = NanoJekyllContext._now_()
-
+        dt = NanoJekyllContext.parse_datetime_or_now(dt)
         return NanoJekyllContext._date_(dt, '%a, %d %b %Y %H:%M:%S %z')
     
     @staticmethod
     def _date_to_string_(dt = None, type = '', style = 'UK', month_format = '%b'):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-string
-        if not dt: dt = NanoJekyllContext._now_()
-
+        dt = NanoJekyllContext.parse_datetime_or_now(dt)
         d = datetime.datetime.strftime(dt, '%d')
         _d = datetime.datetime.strftime(dt, '%-d')
         m = datetime.datetime.strftime(dt, month_format)
@@ -754,8 +757,7 @@ class NanoJekyllContext:
     @staticmethod
     def _date_to_long_string_(dt = None, type = '', style = 'UK'):
         # https://jekyllrb.com/docs/liquid/filters/#date-to-long-string
-        if not dt: dt = NanoJekyllContext._now_()
-
+        dt = NanoJekyllContext.parse_datetime_or_now(dt)
         return NanoJekyllContext._date_to_string_(dt, type = type, style = style, month_format = '%B')
     
     @staticmethod
