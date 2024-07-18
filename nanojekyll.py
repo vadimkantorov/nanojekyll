@@ -736,7 +736,7 @@ class NanoJekyllContext:
     def _date_(dt = None, date_format = '%Y-%m-%d %H:%M:%S'):
         # https://shopify.github.io/liquid/filters/date/
         dt = NanoJekyllContext.parse_datetime_or_now(dt)
-        return str(dt)
+        return datetime.datetime.strftime(dt, date_format)
     
     @staticmethod
     def _date_to_xmlschema_(dt = None):
