@@ -372,6 +372,10 @@ class NanoJekyllContext:
     def __len__(self):
         return len(self.ctx) if isinstance(self.ctx, list | dict | str) else None
 
+    def __contains__(self, other):
+        other = self.unwrap(other)
+        return other in self.ctx
+
     def __iter__(self):
         yield from (map(NanoJekyllContext, self.ctx) if self.ctx else [])
     
@@ -381,7 +385,7 @@ class NanoJekyllContext:
     
     @staticmethod
     def unwrap(x):
-        return x.ctx if hasattr(x, 'ctx') else x
+        return x.ctx if isinstance(x, NanoJekyllContext) else x
 
     @staticmethod
     def pipify(f):
@@ -431,13 +435,17 @@ class NanoJekyllContext:
             code = NanoJekyllContext.__name__+ '(' + NanoJekyllContext.expr_code(pipes[0]) + ')' if is_string_literal(pipes[0]) else NanoJekyllContext.expr_code(pipes[0])
             for func in pipes[1:]:
                 func_name, *func_args = func.split(':', maxsplit = 1)
-                if not func_args:
-                    code = f'{code} | _{func_name}_()'
-                else:
-                    assert len(func_args) == 1
-                    func_args = ', '.join(map(NanoJekyllContext.expr_code, func_args[0].split(',')))
-                    code = f'{code} | _{func_name}_({func_args})'
+                func_args = ', '.join(map(NanoJekyllContext.expr_code, func_args[0].split(','))) if func_args else ''
+                if func_name.endswith('_exp'):
+                    func_args += ', ' * bool(func_args) + 'globals() | locals()'
+                code = f'{code} | _{func_name}_({func_args})'
         else:
+            if ' contains ' in expr:
+                words = expr.split()
+                for k in range(len(words)):
+                    if words[k] == 'contains':
+                        words[k - 1], words[k], words[k + 1] = words[k + 1], 'in', words[k - 1]
+                expr = ' '.join(words)
             code = expr
         return code
 
@@ -787,36 +795,36 @@ class NanoJekyllContext:
         return ('.' + url) if url.startswith('/') else url
     
     @staticmethod
-    def _where_exp_(xs, key, value):
+    def _where_exp_(xs, key, value, vals = {}):
         # https://jekyllrb.com/docs/liquid/filters/#where-expression
-        expr = eval(f'lambda {key}: ' + NanoJekyllContext.expr_code(value), dict(nil = None, false = False, true = True))
+        expr = eval(f'lambda {key}: ' + NanoJekyllContext.expr_code(value), vals | dict(nil = None, false = False, true = True))
         return [x for x in xs if expr(NanoJekyllContext(x))] if xs else []
 
+    @staticmethod
+    def _group_by_exp_(xs, key, value, vals = {}):
+        # https://jekyllrb.com/docs/liquid/filters/#group-by-expression
+        expr_ = eval(f'lambda {key}: ' + NanoJekyllContext.expr_code(value), vals | dict(nil = None, false = False, true = True))
+        expr = lambda item: expr_(NanoJekyllContext(item))
+        return [dict(name = k, items = list(g)) for k, g in itertools.groupby(sorted(xs, key = expr), key = expr)]
+    
+    @staticmethod
+    def _find_exp_(xs, key, value, vals = {}):
+        # https://jekyllrb.com/docs/liquid/filters/#find-expression
+        res = NanoJekyllContext._where_exp_(xs, key, value, vals)
+        return (res + [None])[0]
+    
     @staticmethod
     def _find_(xs, key, value):
         # https://jekyllrb.com/docs/liquid/filters/#find
         res = NanoJekyllContext._where_(xs, key, value)
         return (res + [None])[0]
-
-    @staticmethod
-    def _find_exp_(xs, key, value):
-        # https://jekyllrb.com/docs/liquid/filters/#find-expression
-        res = NanoJekyllContext._where_exp_(xs, key, value)
-        return (res + [None])[0]
-
+    
     @staticmethod
     def _group_by_(xs, key):
         # https://jekyllrb.com/docs/liquid/filters/#group-by
         expr = lambda item: getattr(NanoJekyllContext(item), key, None)
         return [dict(name = k, items = list(g)) for k, g in itertools.groupby(sorted(xs, key = expr), key = expr)]
 
-    @staticmethod
-    def _group_by_exp_(xs, key, value):
-        # https://jekyllrb.com/docs/liquid/filters/#group-by-expression
-        expr_ = eval(f'lambda {key}: ' + NanoJekyllContext.expr_code(value), dict(nil = None, false = False, true = True))
-        expr = lambda item: expr_(NanoJekyllContext(item))
-        return [dict(name = k, items = list(g)) for k, g in itertools.groupby(sorted(xs, key = expr), key = expr)]
-    
     @staticmethod
     def _cgi_escape_(x):
         # https://jekyllrb.com/docs/liquid/filters/#cgi-escape
