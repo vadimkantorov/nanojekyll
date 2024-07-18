@@ -731,11 +731,17 @@ class NanoJekyllContext:
     def parse_datetime_or_now(dt = None, date_formats = ['%Y-%m-%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S', '%Y-%m-%d', '%d/%m/%Y H:%M:%S', '%d/%m/%Y']):
         if not dt:
             return datetime.datetime.now().astimezone()
+
         for date_format in date_formats:
             try:
                 return datetime.datetime.strptime(str(dt or ''), date_format)
             except:
                 continue
+        try:
+            return datetime.datetime.utcfromtimestamp(float(dt))
+        except:
+            pass
+             
         return datetime.datetime.now().astimezone()
     
     @staticmethod
