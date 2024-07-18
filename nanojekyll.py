@@ -103,12 +103,15 @@ class NanoJekyllContext:
                     
                     elif words[0] == 'for':
                         # https://shopify.dev/docs/api/liquid/objects/forloop
+                        varname = words[1]
                         forloop_cnt = add_line('#')
                         add_line('forloop_{} = list({})'.format(forloop_cnt, NanoJekyllContext.expr_code(words[3])))
+                        add_line('forloop_{}_varexists = {} in locals()'.format(forloop_cnt, repr(varname) ))
+                        add_line('forloop_{}_varval = locals().get({})'.format(forloop_cnt, repr(varname) ))
                         if len(words) >= 5 and words[4].startswith('limit:'):
                             if words[4] != 'limit:': words = words[:4] + ['limit:', words[4].split(':', maxsplit = 1)[-1]]
                             add_line('forloop_{0} = forloop_{0}[:(int({1}) if {1} else None)]'.format(forloop_cnt, NanoJekyllContext.expr_code(words[5])))
-                        add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(words[1], forloop_cnt))
+                        add_line('for forloop.index0, {} in enumerate(forloop_{}):'.format(varname, forloop_cnt))
                         indent_level += 1
                         add_line('forloop.index, forloop.rindex, forloop.rindex0, forloop.first, forloop.last, forloop.length = forloop.index0 + 1, len(forloop_{0}) - forloop.index0, len(forloop_{0}) - forloop.index0 - 1, forloop.index0 == 0, forloop.index0 == len(forloop_{0}) - 1, len(forloop_{0})'.format(forloop_cnt))
                     
