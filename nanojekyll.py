@@ -1,7 +1,7 @@
 import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse
 
 class NanoJekyllContext:
-    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', includes = {}, global_variables = [], extra_filters = {}, plugins = {}, indent_level = 0):
+    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', template_path = '', includes = {}, global_variables = [], extra_filters = {}, plugins = {}, indent_level = 0):
         # https://shopify.github.io/liquid/basics/operators/
         # https://shopify.dev/docs/api/liquid/filters/escape
         # https://jekyllrb.com/docs/liquid/filters/
@@ -11,7 +11,7 @@ class NanoJekyllContext:
             return len(self.ctx)
         
         
-        template_code = template_code or getattr(self, 'template_code', '')
+        template_code = template_code or getattr(self, 'template_code', '') or (open(template_path).read() if template_path else '')
         
         if (not templates) and (not template_code):
             return
@@ -72,8 +72,11 @@ class NanoJekyllContext:
                             i += 1
                     
                     elif words[0] == 'cycle':
-                        line_number = add_line('#')
-                        add_line(f'NanoJekyllResult.append(self.cycle(line_number = {line_number}, cycle_cache = cycle_cache, vals = ( ' + ' '.join(words[1:]) + ') ))')
+                        cycle_group = add_line('#')
+                        if words[1][-1:] == ':':
+                            cycle_group = words[1][:-1]
+                            del words[1]
+                        add_line(f'NanoJekyllResult.append(self._cycle_(cycle_group = {cycle_group}, cycle_cache = cycle_cache, vals = ( ' + ' '.join(words[1:]) + ') ))')
         
                     elif words[0] == 'highlight':
                         lang = ''.join(words[1:])
@@ -380,7 +383,7 @@ class NanoJekyllContext:
 
     def __contains__(self, other):
         other = self.unwrap(other)
-        return other in self.ctx
+        return other in (self.ctx or [])
 
     def __iter__(self):
         yield from (map(NanoJekyllContext, self.ctx) if self.ctx else [])
@@ -397,15 +400,6 @@ class NanoJekyllContext:
     def pipify(f):
         return (lambda *args: (f, *args))
 
-    @staticmethod
-    def cycle(line_number, cycle_cache = {}, vals = ()):
-        if not vals:
-            return ''
-        if line_number not in cycle_cache:
-            cycle_cache[line_number] = -1
-        cycle_cache[line_number] = (cycle_cache[line_number] + 1) % len(vals)
-        return str(vals[cycle_cache[line_number]])
-        
     @staticmethod
     def NanoJekyllResultFinalize(result):
         # https://shopify.github.io/liquid/basics/whitespace/
@@ -472,6 +466,16 @@ class NanoJekyllContext:
     @property
     def size(self):
         return NanoJekyllContext(self._size_(self))
+    
+    @staticmethod
+    def _cycle_(cycle_group, cycle_cache = {}, vals = ()):
+        # https://shopify.github.io/liquid/tags/iteration/#cycle
+        if not vals:
+            return ''
+        if cycle_group not in cycle_cache:
+            cycle_cache[cycle_group] = -1
+        cycle_cache[cycle_group] = (cycle_cache[cycle_group] + 1) % len(vals)
+        return str(vals[cycle_cache[cycle_group]])
     
     @staticmethod
     def _at_least_(x, y):
