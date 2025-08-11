@@ -1,7 +1,7 @@
 import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse
 
 class NanoJekyllContext:
-    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', template_path = '', includes = {}, global_variables = [], extra_filters = {}, plugins = {}, indent_level = 0):
+    def __init__(self, ctx = None, *, templates = {}, template_name = '', template_code = '', includes = {}, global_variables = [], local_variables = [], extra_filters = {}, plugins = {}, indent_level = 0):
         # https://shopify.github.io/liquid/basics/operators/
         # https://shopify.dev/docs/api/liquid/filters/escape
         # https://jekyllrb.com/docs/liquid/filters/
@@ -10,23 +10,21 @@ class NanoJekyllContext:
             self.ctx += ' ' * 4 * indent_level + line + '\n'
             return len(self.ctx)
         
-        
-        template_code = template_code or getattr(self, 'template_code', '') or (open(template_path).read() if template_path else '')
-        
-        if (not templates) and (not template_code):
+        template_code = template_code or getattr(self, 'template_code', '')
+        if not templates and template_code:
+            templates = {(template_name or 'default') : template_code}
+
+        if not templates:
             return
-
-        self.ctx = ''
-
+        
         if templates:
             indent_level = 1
+            self.ctx = ''
             self.ctx += 'import os, sys, re, html, json, math, datetime, itertools, inspect, urllib.parse\n\n'
             self.ctx += inspect.getsource(NanoJekyllContext) + '\n'
             self.ctx += ' ' * 4 * indent_level + 'includes = ' + repr(includes) + '\n\n'
         
             self.ctx += '\n'.join(str(Plugin(template_name = 'plugin_' + plugin_name, includes = includes, global_variables = global_variables, indent_level = indent_level)) for plugin_name, Plugin in plugins.items()) + '\n'
-        else:
-            templates = {(template_name or 'default') : template_code}
 
         
         for template_name, template_code in templates.items():
@@ -37,13 +35,14 @@ class NanoJekyllContext:
             forloop_cnt, forloop_varname = 0, 'tmp'
             
             # https://shopify.github.io/liquid/tags/iteration/#forloop-object
-            add_line(f'def render_{function_name}(self):')
+            add_line(f'def render_{function_name}(self, ' + ', '.join(local_variables) + '):')
             indent_level += 1
             add_line('nil, empty, false, true, NanoJekyllResult, cycle_cache = None, None, False, True, [], {}')
             add_line('class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1')
             add_line('( ' + ', '.join(builtin_filters) +' ) = ( ' + ', '.join(f'self.pipify(self.{k})' for k in builtin_filters) + ' )')
             add_line('( ' + ', '.join(extra_filters       ) +' ) = ( ' + ', '.join(f'self.pipify(extra_filters{k})' for k in extra_filters) + ' )')
             add_line('( ' + ', '.join(global_variables) +' ) = ( ' + ', '.join(NanoJekyllContext.__name__ + f'(self.ctx.get({k!r}))' for k in global_variables) + ' )')
+            add_line('( ' + ', '.join(local_variables) +' ) = ( ' + ', '.join(NanoJekyllContext.__name__ + f'({k})' for k in local_variables) + ' )')
             
             i = 0
             while i < len(tokens):
@@ -171,7 +170,7 @@ class NanoJekyllContext:
             exec(python_source, global_namespace)
             cls = global_namespace[NanoJekyllContext.__name__] 
         except Exception as e:
-            print(e)
+            print('NanoJekyllContext.load_class: exception', type(e), e)
             cls = None
         return cls
 
@@ -450,7 +449,7 @@ class NanoJekyllContext:
         return code
 
     def render(self, template_name = '', is_plugin = False):
-        fn_name = ('render_' if not is_plugin else 'render_plugin_') + self.sanitize_template_name(template_name or 'default')
+        fn_name = 'render_' + 'plugin_' * is_plugin + self.sanitize_template_name(template_name or 'default')
         fn = getattr(self, fn_name, None)
         assert fn is not None and not isinstance(fn, NanoJekyllContext), f'{fn_name} not found in self'
         return fn()
