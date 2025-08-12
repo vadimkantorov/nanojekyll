@@ -35,7 +35,7 @@ class NanoJekyllContext:
             forloop_cnt, forloop_varname = 0, 'tmp'
             
             # https://shopify.github.io/liquid/tags/iteration/#forloop-object
-            add_line(f'def render_{function_name}(self, ' + ', '.join(local_variables) + '):')
+            add_line(f'def render_{function_name}(self, ' + ', '.join(f'{k}=None' for k in local_variables) + '):')
             indent_level += 1
             add_line('nil, empty, false, true, NanoJekyllResult, cycle_cache = None, None, False, True, [], {}')
             add_line('class forloop: index0, index, rindex, rindex0, first, last, length = -1, -1, -1, -1, False, False, -1')
@@ -175,7 +175,7 @@ class NanoJekyllContext:
         return cls
 
     @staticmethod
-    def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
+    def yaml_loads(content, convert_bool = True, convert_int = True, convert_dict = True, convert_none = True): # from https://gist.github.com/vadimkantorov/b26eda3645edb13feaa62b874a3e7f6f
         def procval(val):
             read_until = lambda tail, chars: ([(tail[:i], tail[i+1:]) for i, c in enumerate(tail) if c in chars] or [(tail, '')])[0]
 
@@ -188,10 +188,13 @@ class NanoJekyllContext:
                 is_int = val.isdigit()
                 is_bool = val.lower() in ['true', 'false']
                 is_dict = len(val) >= 2 and (val[0] == '{' and val[-1] == '}')
-                if is_int and convert_int:
-                    return int(val) if convert_int else val
+                is_none = val == 'null'
+                if is_none and convert_none:
+                    return None
+                elif is_int and convert_int:
+                    return int(val)
                 elif is_bool and convert_bool:
-                    return dict(true = True, false = False)[val.lower()] if convert_int else val
+                    return val.lower() == 'true'
                 elif is_dict and convert_dict:
                     res = {}
                     tail = val
@@ -285,7 +288,8 @@ class NanoJekyllContext:
             else:
                 template += line
             template += f.read()
-        return front_matter if not parse_yaml else NanoJekyllContext.yaml_loads(front_matter), template
+        front_matter = front_matter.strip().removeprefix(front_matter_sep.strip()).removesuffix(front_matter_sep.strip())
+        return (front_matter if not parse_yaml else NanoJekyllContext.yaml_loads(front_matter), template)
 
 
     class NanoJekyllTrimLeft(str): pass
@@ -448,11 +452,11 @@ class NanoJekyllContext:
             code = expr
         return code
 
-    def render(self, template_name = '', is_plugin = False):
+    def render(self, template_name = '', is_plugin = False, **local_ctx):
         fn_name = 'render_' + 'plugin_' * is_plugin + self.sanitize_template_name(template_name or 'default')
         fn = getattr(self, fn_name, None)
         assert fn is not None and not isinstance(fn, NanoJekyllContext), f'{fn_name} not found in self'
-        return fn()
+        return fn(**local_ctx)
     
     @property
     def first(self):
@@ -1200,3 +1204,31 @@ class NanoJekyllPluginFeedMetaXml(NanoJekyllContext):
   {% endfor %}
 </feed>
 '''
+
+if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--input-path', '-i')
+    parser.add_argument('--output-path', '-o')
+    parser.add_argument('--template-path', nargs = '+')
+    args = parser.parse_args()
+
+    templates = {os.path.splitext(os.path.basename(template_html))[0] : NanoJekyllContext.read_template(template_html)[1] for template_html in args.template_path}
+    template_name = list(templates.keys())[0]
+    global_ctx = NanoJekyllContext.read_template(args.template_path[0], parse_yaml = True)[0]
+    global_variables = list(global_ctx.keys())
+    print(*args.template_path, sep = '\n')
+    
+    local_ctx = json.load(open(args.input_path))
+    local_variables = list(local_ctx.keys())
+    print(args.input_path)
+
+    python_source = str(NanoJekyllContext(templates = templates, global_variables = global_variables, local_variables = local_variables))
+    cls = NanoJekyllContext.load_class(python_source)
+    assert cls is not None
+    rendered_html = cls(global_ctx).render(template_name = template_name, is_plugin = False, **local_ctx)
+    
+    if os.path.dirname(args.output_path):
+        os.makedirs(os.path.dirname(args.output_path), exist_ok = True)
+    print(rendered_html, file = open(args.output_path, 'w'))
+    print(args.output_path)
