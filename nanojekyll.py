@@ -1208,27 +1208,35 @@ class NanoJekyllPluginFeedMetaXml(NanoJekyllContext):
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument('--input-path', '-i')
-    parser.add_argument('--output-path', '-o')
+    parser.add_argument('--input-path', '-i', action = 'append')
+    parser.add_argument('--output-path', '-o', action = 'append')
     parser.add_argument('--template-path', nargs = '+')
     args = parser.parse_args()
+
+    assert args.input_path and args.output_path
+    assert len(args.input_path) == len(args.output_path)
 
     templates = {os.path.splitext(os.path.basename(template_html))[0] : NanoJekyllContext.read_template(template_html)[1] for template_html in args.template_path}
     template_name = list(templates.keys())[0]
     global_ctx = NanoJekyllContext.read_template(args.template_path[0], parse_yaml = True)[0]
     global_variables = list(global_ctx.keys())
     print(*args.template_path, sep = '\n')
-    
-    local_ctx = json.load(open(args.input_path))
-    local_variables = list(local_ctx.keys())
-    print(args.input_path)
+   
+    local_variables, local_ctx = [], []
+    for input_path in args.input_path:
+        ctx = json.load(open(args.input_path))
+        local_variables.append(list(loaded.keys()))
+        local_ctx.append(ctx)
+        print(input_path)
 
-    python_source = str(NanoJekyllContext(templates = templates, global_variables = global_variables, local_variables = local_variables))
+    python_source = str(NanoJekyllContext(templates = templates, global_variables = global_variables, local_variables = local_variables[0]))
     cls = NanoJekyllContext.load_class(python_source)
     assert cls is not None
-    rendered_html = cls(global_ctx).render(template_name = template_name, is_plugin = False, **local_ctx)
+    tmpl = cls(global_ctx)
     
-    if os.path.dirname(args.output_path):
-        os.makedirs(os.path.dirname(args.output_path), exist_ok = True)
-    print(rendered_html, file = open(args.output_path, 'w'))
-    print(args.output_path)
+    for ctx, output_path in zip(local_ctx, args.output_path):
+        rendered_html = tmpl.render(template_name = template_name, is_plugin = False, **ctx)
+        if os.path.dirname(output_path):
+            os.makedirs(os.path.dirname(output_path), exist_ok = True)
+        print(rendered_html, file = open(output_path, 'w'))
+        print(output_path)
