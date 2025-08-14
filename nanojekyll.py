@@ -1214,7 +1214,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     assert args.input_path and args.output_path
-    assert len(args.input_path) == len(args.output_path)
+    assert len(args.input_path) == len(args.output_path) and len(args.input_path) >= 1
 
     templates = {os.path.splitext(os.path.basename(template_html))[0] : NanoJekyllContext.read_template(template_html)[1] for template_html in args.template_path}
     template_name = list(templates.keys())[0]
@@ -1222,14 +1222,14 @@ if __name__ == '__main__':
     global_variables = list(global_ctx.keys())
     print(*args.template_path, sep = '\n')
    
-    local_variables, local_ctx = [], []
+    local_ctx = []
     for input_path in args.input_path:
-        ctx = json.load(open(args.input_path))
-        local_variables.append(list(loaded.keys()))
+        ctx = json.load(open(input_path))
         local_ctx.append(ctx)
         print(input_path)
-
-    python_source = str(NanoJekyllContext(templates = templates, global_variables = global_variables, local_variables = local_variables[0]))
+    
+    local_variables = list(local_ctx[0].keys())
+    python_source = str(NanoJekyllContext(templates = templates, global_variables = global_variables, local_variables = local_variables))
     cls = NanoJekyllContext.load_class(python_source)
     assert cls is not None
     tmpl = cls(global_ctx)
